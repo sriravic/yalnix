@@ -85,6 +85,9 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 	{
 		printf("error creating initial page tables\n");		
 	}
+	
+	// set the limit register values
+	gR0PtBegin = (unsigned int)&gPageTable;
 }
 
 
@@ -126,13 +129,17 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	
 	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
 	printf("Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
-	WriteRegister(REG_VECTOR_BASE, (unsigned int, ivtBaseRegAddr);
+	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
 	// create all the data structures required
 	
 	// set the page table addresses in the registers
+	WriteRegister(REG_PTBR0, gR0PtBegin);
+	WriteRegister(REG_PTLR0, gNumPagesR0);
 	
 	// enable virtual memory
+	WriteRegister(REG_VM_ENABLE, 1);
 	
-	// 
+	// call do idle
+	DoIdle();
 }

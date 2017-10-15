@@ -285,14 +285,14 @@ typedef ucontext_t KernelContext;
  *  are currently used by the hardware.  All unused entries should be
  *  initialized to NULL.
  */
-#define	TRAP_KERNEL		0
-#define	TRAP_CLOCK		1
+#define	TRAP_KERNEL			0
+#define	TRAP_CLOCK			1
 #define	TRAP_ILLEGAL		2
-#define	TRAP_MEMORY		3
-#define	TRAP_MATH		4
+#define	TRAP_MEMORY			3
+#define	TRAP_MATH			4
 #define	TRAP_TTY_RECEIVE	5
 #define	TRAP_TTY_TRANSMIT	6
-#define	TRAP_DISK		7
+#define	TRAP_DISK			7
 
 #define	TRAP_VECTOR_SIZE	16	/* dimensioned size of array */
 

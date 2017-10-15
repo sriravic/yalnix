@@ -9,11 +9,13 @@ Description: Contains the methods and structures for handling interrupts from ha
 #ifndef __INTERRUPT_HANDLER_H__
 #define __INTERRUPT_HANDLER_H__
 
+#include <hardware.h>
+
 // Interrupt handler for kernel syscalls
-void interruptKernel(struct UserContext* ctx)
+void interruptKernel(UserContext* ctx)
 {
 	// get code for the kernel system call
-	int code = ctx.code;
+	int code = ctx->code;
 	switch(code)
 	{
 		// call appropriate system call with the user context structure passed
@@ -23,14 +25,14 @@ void interruptKernel(struct UserContext* ctx)
 // Interrupt handler for clock
 // Logic: The OS will invoke the scheduler to swap existing processes after the have obtained the
 //  	  enough quanta of runtime, checks for processes waiting on IO and moves them to the correct global queues as necessary.
-void interruptClock(struct UserContext* ctx)
+void interruptClock(UserContext* ctx)
 {
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
 }
 
 // Interrupt handler for illegal instruction
-void interruptIllegal(struct UserContext* ctx)
+void interruptIllegal(UserContext* ctx)
 {
 	// display the error to log
 	// kill the process
@@ -38,7 +40,7 @@ void interruptIllegal(struct UserContext* ctx)
 }
 
 // Interrupt handler for memory
-void interruptMemory(struct UserContext* ctx)
+void interruptMemory(UserContext* ctx)
 {
 	// check for stack brk or dynamic brk
 	// if stack brk, then allocate a new pages
@@ -54,14 +56,14 @@ void interruptMemory(struct UserContext* ctx)
 }
 
 // Interrupt handler for math traps
-void interruptMath(struct UserContext* ctx)
+void interruptMath(UserContext* ctx)
 {
 	// check the status of the register for what caused this math traps
 	// report to user and determine further course of action
 }
 
 // Interrupt Handler for terminal recieve
-void interruptTtyReceive(struct UserContext* ctx)
+void interruptTtyReceive(UserContext* ctx)
 {
 	// allocate memory in kernel space for moving contents from
 	// terminal memory to kernel memory.
@@ -70,13 +72,20 @@ void interruptTtyReceive(struct UserContext* ctx)
 }
 
 // Interrupt Handler for terminal transmit
-void interruptTtyTransmit(struct UserContext* ctx)
+void interruptTtyTransmit(UserContext* ctx)
 {
 	// check for correctness of data from transmit message from terminal
 	// move the data from terminal's address space to kernel's address space
 	// move the data to any process that is waiting on terminal data/
 	// in case of a valid command for process	
 		// call fork() - exec with the parameters
+}
+
+// This is a dummy interrupt handler that does nothing.
+// for the rest of the IVT entries
+void interruptDummy(UserContext* ctx)
+{
+	
 }
 
 
