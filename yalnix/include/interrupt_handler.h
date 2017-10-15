@@ -10,6 +10,7 @@ Description: Contains the methods and structures for handling interrupts from ha
 #define __INTERRUPT_HANDLER_H__
 
 #include <hardware.h>
+#include <yalnix.h>
 
 // Interrupt handler for kernel syscalls
 void interruptKernel(UserContext* ctx)
@@ -53,6 +54,8 @@ void interruptMemory(UserContext* ctx)
 		// update the sbrk/brk values for the process
 	// If at any point the stack grows into the heap,
 		// log and quit the process.
+		
+	TracePrintf(0, "TRAP_MEMORY.\n");
 }
 
 // Interrupt handler for math traps

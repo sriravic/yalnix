@@ -33,7 +33,7 @@ int SetKernelBrk(void* addr)
 	if(gVMemEnabled == -1)
 	{
 		// virtual memory has not yet been set.
-		printf("SetKernelBrk : 0x%08X\n", addr);
+		TracePrintf(0, "SetKernelBrk : 0x%08X\n", addr);
 		globalBrk = addr;
 		return 0;
 	}
@@ -47,47 +47,52 @@ int SetKernelBrk(void* addr)
 void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 {
     globalBrk = _KernelDataEnd;
-    printf("DataStart  : 0x%08X\n", _KernelDataStart);
-    printf("DataEnd    : 0x%08X\n", _KernelDataEnd);
+    TracePrintf(0, "DataStart  : 0x%08X\n", _KernelDataStart);
+    TracePrintf(0, "DataEnd    : 0x%08X\n", _KernelDataEnd);
 
 	// create the initial page tables
 	unsigned int dataStart = (unsigned int)_KernelDataStart;
 	unsigned int dataEnd = (unsigned int)_KernelDataEnd;
 	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
 	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
-	printf("Data Start rounded : 0x%08X\n", dataStartRounded);
-	printf("Data End Rounded : 0x%08X\n", dataEndRounded);
+	unsigned int textEnd = DOWN_TO_PAGE(dataStart);
+	TracePrintf(0, "Data Start rounded : 0x%08X\n", dataStartRounded);
+	TracePrintf(0, "Data End Rounded : 0x%08X\n", dataEndRounded);
 	
-	unsigned int NUM_EXEC_PAGES = dataStartRounded / PAGESIZE;
-	unsigned int NUM_DATA_PAGES = (dataEnd - dataStartRounded) / PAGESIZE;
+	unsigned int NUM_TEXT_PAGES = dataStartRounded / PAGESIZE;
+	unsigned int NUM_DATA_PAGES = (dataEndRounded - dataStartRounded) / PAGESIZE;
 	unsigned int NUM_PAGES = dataEndRounded / PAGESIZE;
-	printf("Num physical pages : %u\n", NUM_PAGES);
+	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
+	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
+	TracePrintf(0, "Num physical pages : %u\n", NUM_PAGES);
+	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_PAGES);
+	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_PAGES);
 	
 	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * NUM_PAGES);
 	if(gPageTable != NULL)
 	{
 		gNumPagesR0 = NUM_PAGES;
 		int i;
-		for(i = 0; i < NUM_EXEC_PAGES; i++)
+		for(i = 0; i < NUM_TEXT_PAGES-1; i++)
 		{
 			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ | PROT_EXEC;
+			gPageTable[i].prot = PROT_READ|PROT_EXEC;
 			gPageTable[i].pfn = i;
 		}
-		for(i = NUM_EXEC_PAGES; i < NUM_DATA_PAGES; i++)
+		for(i = NUM_TEXT_PAGES - 1; i < NUM_PAGES; i++)
 		{
 			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ | PROT_WRITE;
+			gPageTable[i].prot = PROT_READ|PROT_WRITE;
 			gPageTable[i].pfn = i;
 		}
 	}
 	else
 	{
-		printf("error creating initial page tables\n");		
+		TracePrintf(0, "error creating initial page tables\n");		
 	}
 	
 	// set the limit register values
-	gR0PtBegin = (unsigned int)&gPageTable;
+	gR0PtBegin = (unsigned int)gPageTable;
 }
 
 
@@ -102,16 +107,16 @@ void DoIdle(void)
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
-    printf("KernelStart Function\n");
+    TracePrintf(0, "KernelStart Function\n");
     
     // parse the argvs
     int argc = 0;
     while(argv[argc] != NULL)
     {
-        printf("\t Argv : %s\n", argv[argc++]);
+        TracePrintf(0, "\t Argv : %s\n", argv[argc++]);
     }
 
-    printf("Available memory : %u MB\n", getMB(pmem_size));
+    TracePrintf(0, "Available memory : %u MB\n", getMB(pmem_size));
 	
 	// initialize the IVT
 	// only 7 are valid
@@ -128,7 +133,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		gIVT[i] = (void*)&interruptDummy;
 	
 	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
-	printf("Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
+	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
 	// create all the data structures required
@@ -141,5 +146,5 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_VM_ENABLE, 1);
 	
 	// call do idle
-	DoIdle();
+	//DoIdle();
 }
