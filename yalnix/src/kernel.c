@@ -10,6 +10,14 @@ typedef struct pte PageTableEntry;
 unsigned int gNumPagesR0;		// region0 pages
 unsigned int gNumPagesR1;		// region1 pages
 
+// page table address
+unsigned int gR0PtBegin;
+unsigned int gR0PtEnd;
+unsigned int gR1PtBegin;
+unsigned int gR1PtEnd;
+
+int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
+
 PageTableEntry* gPageTable;
 
 unsigned int getKB(unsigned int size) { return size / (1 << 10); }
@@ -18,9 +26,18 @@ unsigned int getGB(unsigned int size) { return size / (1 << 30); }
 
 int SetKernelBrk(void* addr)
 {
-    printf("SetKernelBrk : 0x%08X\n", addr);
-    globalBrk = addr;
-    return 0;
+	if(gVMemEnabled == -1)
+	{
+		// virtual memory has not yet been set.
+		printf("SetKernelBrk : 0x%08X\n", addr);
+		globalBrk = addr;
+		return 0;
+	}
+	else
+	{
+		// virtual memory has been enabled.
+		// the logic will be different
+	}
 }
 
 void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
@@ -30,21 +47,33 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
     printf("DataEnd    : 0x%08X\n", _KernelDataEnd);
 
 	// create the initial page tables
+	unsigned int dataStart = (unsigned int)_KernelDataStart;
 	unsigned int dataEnd = (unsigned int)_KernelDataEnd;
+	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
 	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
+	printf("Data Start rounded : 0x%08X\n", dataStartRounded);
 	printf("Data End Rounded : 0x%08X\n", dataEndRounded);
 	
-	unsigned int NUM_PAGES = dataEndRounded / PAGE_SIZE;
+	unsigned int NUM_EXEC_PAGES = dataStartRounded / PAGESIZE;
+	unsigned int NUM_DATA_PAGES = (dataEnd - dataStartRounded) / PAGESIZE;
+	unsigned int NUM_PAGES = dataEndRounded / PAGESIZE;
 	printf("Num physical pages : %u\n", NUM_PAGES);
 	
 	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * NUM_PAGES);
 	if(gPageTable != NULL)
 	{
 		gNumPagesR0 = NUM_PAGES;
-		for(int i = 0; i < NUM_PAGES; i++)
+		int i;
+		for(i = 0; i < NUM_EXEC_PAGES; i++)
 		{
 			gPageTable[i].valid = 1;
 			gPageTable[i].prot = PROT_READ | PROT_EXEC;
+			gPageTable[i].pfn = i;
+		}
+		for(i = NUM_EXEC_PAGES; i < NUM_DATA_PAGES; i++)
+		{
+			gPageTable[i].valid = 1;
+			gPageTable[i].prot = PROT_READ | PROT_WRITE;
 			gPageTable[i].pfn = i;
 		}
 	}
@@ -76,4 +105,12 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
     }
 
     printf("Available memory : %u MB\n", getMB(pmem_size));
+	
+	// create all the data structures required
+	
+	// set the page table addresses in the registers
+	
+	// enable virtual memory
+	
+	// 
 }
