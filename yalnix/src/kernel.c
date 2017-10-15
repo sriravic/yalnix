@@ -16,13 +16,17 @@ unsigned int gR0PtEnd;
 unsigned int gR1PtBegin;
 unsigned int gR1PtEnd;
 
+// kernel text and data
+unsigned int gKernelDataStart;
+unsigned int gKernelDataEnd;
+
 // interrupt vector table
 // we have 7 types of interrupts
 void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
 
-PageTableEntry* gPageTable;
+PageTableEntry* gPageTable;	// initial page tables
 
 unsigned int getKB(unsigned int size) { return size / (1 << 10); }
 unsigned int getMB(unsigned int size) { return size / (1 << 20); }
@@ -50,51 +54,9 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
     TracePrintf(0, "DataStart  : 0x%08X\n", _KernelDataStart);
     TracePrintf(0, "DataEnd    : 0x%08X\n", _KernelDataEnd);
 
-	// create the initial page tables
-	unsigned int dataStart = (unsigned int)_KernelDataStart;
-	unsigned int dataEnd = (unsigned int)_KernelDataEnd;
-	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
-	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
-	unsigned int textEnd = DOWN_TO_PAGE(dataStart);
-	TracePrintf(0, "Data Start rounded : 0x%08X\n", dataStartRounded);
-	TracePrintf(0, "Data End Rounded : 0x%08X\n", dataEndRounded);
-	
-	unsigned int NUM_TEXT_PAGES = dataStartRounded / PAGESIZE;
-	unsigned int NUM_DATA_PAGES = (dataEndRounded - dataStartRounded) / PAGESIZE;
-	unsigned int NUM_PAGES = dataEndRounded / PAGESIZE;
-	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
-	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
-	TracePrintf(0, "Num physical pages : %u\n", NUM_PAGES);
-	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_PAGES);
-	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_PAGES);
-	
-	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * NUM_PAGES);
-	if(gPageTable != NULL)
-	{
-		gNumPagesR0 = NUM_PAGES;
-		int i;
-		for(i = 0; i < NUM_TEXT_PAGES-1; i++)
-		{
-			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ|PROT_EXEC;
-			gPageTable[i].pfn = i;
-		}
-		for(i = NUM_TEXT_PAGES - 1; i < NUM_PAGES; i++)
-		{
-			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ|PROT_WRITE;
-			gPageTable[i].pfn = i;
-		}
-	}
-	else
-	{
-		TracePrintf(0, "error creating initial page tables\n");		
-	}
-	
-	// set the limit register values
-	gR0PtBegin = (unsigned int)gPageTable;
+	gKernelDataStart = (unsigned int)_KernelDataStart;
+	gKernelDataEnd = (unsigned int)_KernelDataEnd;
 }
-
 
 void DoIdle(void)
 {
@@ -136,18 +98,67 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
+	// create the initial page tables
 	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;
 	TracePrintf(0, "total frames : %u\n", TOTAL_FRAMES);
 	
-	// create all the data structures required
+	unsigned int dataStart = (unsigned int)gKernelDataStart;
+	unsigned int dataEnd = (unsigned int)gKernelDataEnd;
+	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
+	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
+	unsigned int textEnd = DOWN_TO_PAGE(dataStart);
+	TracePrintf(0, "Data Start rounded : 0x%08X\n", dataStartRounded);
+	TracePrintf(0, "Data End Rounded : 0x%08X\n", dataEndRounded);
+	
+	unsigned int NUM_TEXT_PAGES = dataStartRounded / PAGESIZE;
+	unsigned int NUM_DATA_PAGES = (dataEndRounded - dataStartRounded) / PAGESIZE;
+	unsigned int NUM_R0_PAGES = TOTAL_FRAMES - 2; 	// lets just have two frames left for region 1			
+	unsigned int NUM_R1_PAGES = 2;					// lets just have one pa
+	unsigned int TOTAL_PAGES = NUM_R0_PAGES + NUM_R1_PAGES;
+	
+	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
+	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
+	TracePrintf(0, "Num physical frames : %u\n", TOTAL_FRAMES);
+	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_PAGES);
+	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_PAGES);
+	
+	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * TOTAL_PAGES);
+	if(gPageTable != NULL)
+	{
+		int i;
+		for(i = 0; i < NUM_TEXT_PAGES-1; i++)
+		{
+			gPageTable[i].valid = 1;
+			gPageTable[i].prot = PROT_READ|PROT_EXEC;
+			gPageTable[i].pfn = i;
+		}
+		for(i = NUM_TEXT_PAGES - 1; i < TOTAL_PAGES; i++)
+		{
+			gPageTable[i].valid = 1;
+			gPageTable[i].prot = PROT_READ|PROT_WRITE;
+			gPageTable[i].pfn = i;
+		}
+	}
+	else
+	{
+		TracePrintf(0, "error creating initial page tables\n");		
+	}
+	
+	// set the limit register values
+	gR0PtBegin = (unsigned int)gPageTable;
+	gR1PtBegin = (unsigned int)(gPageTable + NUM_R0_PAGES);
+	gNumPagesR0 = NUM_R0_PAGES;
+	gNumPagesR1 = NUM_R1_PAGES;
 	
 	// set the page table addresses in the registers
 	WriteRegister(REG_PTBR0, gR0PtBegin);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
+	WriteRegister(REG_PTBR1, gR1PtBegin);
+	WriteRegister(REG_PTLR1, gNumPagesR1);
 	
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
 	
 	// call do idle
-	//DoIdle();
+	DoIdle();
 }
