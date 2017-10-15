@@ -2,7 +2,7 @@
 #include <filesystem.h>
 #include <hardware.h>
 #include <load_info.h>
-#include <pagetable.h>
+#include <interrupt_handler.h>
 
 void* globalBrk;
 
@@ -15,6 +15,10 @@ unsigned int gR0PtBegin;
 unsigned int gR0PtEnd;
 unsigned int gR1PtBegin;
 unsigned int gR1PtEnd;
+
+// interrupt vector table
+// we have 7 types of interrupts
+void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
 
@@ -105,6 +109,24 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
     }
 
     printf("Available memory : %u MB\n", getMB(pmem_size));
+	
+	// initialize the IVT
+	// only 7 are valid
+	// setting the rest to the dummy interrupt handler
+	gIVT[0] = (void*)&interruptKernel;
+	gIVT[1] = (void*)&interruptClock;
+	gIVT[2] = (void*)&interruptIllegal;
+	gIVT[3] = (void*)&interruptMemory;
+	gIVT[4] = (void*)&interruptMath;
+	gIVT[5] = (void*)&interruptTtyReceive;
+	gIVT[6] = (void*)&interruptTtyTransmit;
+	int i;
+	for(i = 7; i < TRAP_VECTOR_SIZE; i++)
+		gIVT[i] = (void*)&interruptDummy;
+	
+	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
+	printf("Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
+	WriteRegister(REG_VECTOR_BASE, (unsigned int, ivtBaseRegAddr);
 	
 	// create all the data structures required
 	
