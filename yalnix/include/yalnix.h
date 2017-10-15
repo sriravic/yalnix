@@ -8,7 +8,7 @@
  * Ported to Linux/x86 by S.W. Smith, Dartmouth College.  Summer 2001
  * sws@cs.dartmouth.edu
  * (with help from David Johnson and Evan Knop)
- * 
+ * e
  * "LINUX" compile flag == Linux AND x86
  * Linux version must support makecontext/getcontext... e.g., >= 2.4.8
  *
@@ -38,15 +38,15 @@
 #define	YALNIX_EXEC		2
 #define	YALNIX_EXIT		3
 #define	YALNIX_WAIT		4
-#define YALNIX_GETPID           5
+#define YALNIX_GETPID   5
 #define	YALNIX_BRK		6
-#define	YALNIX_DELAY		7
+#define	YALNIX_DELAY	7
 
 #define	YALNIX_TTY_READ		21
 #define	YALNIX_TTY_WRITE	22
 
 #define	YALNIX_REGISTER		31
-#define YALNIX_SEND		32
+#define YALNIX_SEND		    32
 #define YALNIX_RECEIVE		33
 #define YALNIX_RECEIVESPECIFIC	34
 #define YALNIX_REPLY		35
