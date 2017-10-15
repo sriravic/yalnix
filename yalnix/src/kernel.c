@@ -136,6 +136,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
+	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;
+	TracePrintf(0, "total frames : %u\n", TOTAL_FRAMES);
+	
 	// create all the data structures required
 	
 	// set the page table addresses in the registers
