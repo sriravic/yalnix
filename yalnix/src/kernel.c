@@ -165,6 +165,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_VM_ENABLE, 1);
 
 	// run idle proces
+	// on the top of the VM region - very hacky approach
+	// but still works.
 	uctx->pc = (void*)DoIdle;
-	uctx->sp = (void*)(dataEnd + 5 * PAGESIZE);
+	uctx->sp = (void*)(VMEM_LIMIT - PAGESIZE);
 }
