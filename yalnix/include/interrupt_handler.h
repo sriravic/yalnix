@@ -29,7 +29,7 @@ void interruptKernel(UserContext* ctx)
 void interruptClock(UserContext* ctx)
 {
 	// Handle movement of processes from different waiting/running/exited queues
-	// Handle the cleanup of potential swapped out pages
+	// Handle the cleanup of potential swapped out pages	
 }
 
 // Interrupt handler for illegal instruction
@@ -90,8 +90,5 @@ void interruptDummy(UserContext* ctx)
 {
 	
 }
-
-
-
 
 #endif

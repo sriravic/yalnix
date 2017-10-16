@@ -63,7 +63,7 @@ void DoIdle(void)
 	while(1)
 	{
 		TracePrintf(1, "DoIdle\n");
-		Pause();
+		//Pause();
 	}
 }
 
@@ -99,8 +99,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
 	// create the initial page tables
-	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;
+	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;		// compute the total number of frames
+	unsigned int TOTAL_PAGES  = VMEM_SIZE / PAGESIZE;		// compute the total number of pages
+	unsigned int NUM_R0_PAGES = VMEM_0_SIZE / PAGESIZE;	// the total number of pages required for r0
+	unsigned int NUM_R1_PAGES = VMEM_1_SIZE / PAGESIZE;	// the total number of pages required for r1
 	TracePrintf(0, "total frames : %u\n", TOTAL_FRAMES);
+	TracePrintf(0, "total pages  : %u\n", TOTAL_PAGES);
+	TracePrintf(0, "total R0 pages : %u\n", NUM_R0_PAGES);
+	TracePrintf(0, "total R1 pages : %u\n", NUM_R1_PAGES);
 	
 	unsigned int dataStart = (unsigned int)gKernelDataStart;
 	unsigned int dataEnd = (unsigned int)gKernelDataEnd;
@@ -110,29 +116,28 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	TracePrintf(0, "Data Start rounded : 0x%08X\n", dataStartRounded);
 	TracePrintf(0, "Data End Rounded : 0x%08X\n", dataEndRounded);
 	
-	unsigned int NUM_TEXT_PAGES = dataStartRounded / PAGESIZE;
-	unsigned int NUM_DATA_PAGES = (dataEndRounded - dataStartRounded) / PAGESIZE;
-	unsigned int NUM_R0_PAGES = TOTAL_FRAMES - 2; 	// lets just have two frames left for region 1			
-	unsigned int NUM_R1_PAGES = 2;					// lets just have one pa
-	unsigned int TOTAL_PAGES = NUM_R0_PAGES + NUM_R1_PAGES;
+	unsigned int NUM_TEXT_FRAMES = textEnd / PAGESIZE;
+	unsigned int NUM_DATA_FRAMES = (dataEndRounded - dataStartRounded) / PAGESIZE;
+	unsigned int NUM_R0_FRAMES = TOTAL_FRAMES - 2; 	// lets just have two frames left for region 1			
+	unsigned int NUM_R1_FRAMES = NUM_R0_PAGES;					// lets just have one pa
 	
 	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
 	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
 	TracePrintf(0, "Num physical frames : %u\n", TOTAL_FRAMES);
-	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_PAGES);
-	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_PAGES);
+	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_FRAMES);
+	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_FRAMES);
 	
 	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * TOTAL_PAGES);
 	if(gPageTable != NULL)
 	{
 		int i;
-		for(i = 0; i < NUM_TEXT_PAGES-1; i++)
+		for(i = 0; i < NUM_TEXT_FRAMES; i++)
 		{
 			gPageTable[i].valid = 1;
 			gPageTable[i].prot = PROT_READ|PROT_EXEC;
 			gPageTable[i].pfn = i;
 		}
-		for(i = NUM_TEXT_PAGES - 1; i < TOTAL_PAGES; i++)
+		for(i = NUM_TEXT_FRAMES; i < TOTAL_PAGES; i++)
 		{
 			gPageTable[i].valid = 1;
 			gPageTable[i].prot = PROT_READ|PROT_WRITE;
