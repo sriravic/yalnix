@@ -58,15 +58,6 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
 }
 
-void DoIdle(void)
-{
-	while(1)
-	{
-		TracePrintf(1, "DoIdle\n");
-		//Pause();
-	}
-}
-
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
     TracePrintf(0, "KernelStart Function\n");
@@ -163,7 +154,4 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
-	
-	// call do idle
-	DoIdle();
 }
