@@ -58,6 +58,15 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
 }
 
+void DoIdle()
+{
+	while(1)
+	{
+		TracePrintf(1, "DoIdle\n");
+		Pause();
+	}
+}
+
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
     TracePrintf(0, "KernelStart Function\n");
@@ -74,16 +83,16 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// initialize the IVT
 	// only 7 are valid
 	// setting the rest to the dummy interrupt handler
-	gIVT[0] = (void*)&interruptKernel;
-	gIVT[1] = (void*)&interruptClock;
-	gIVT[2] = (void*)&interruptIllegal;
-	gIVT[3] = (void*)&interruptMemory;
-	gIVT[4] = (void*)&interruptMath;
-	gIVT[5] = (void*)&interruptTtyReceive;
-	gIVT[6] = (void*)&interruptTtyTransmit;
+	gIVT[0] = (void*)interruptKernel;
+	gIVT[1] = (void*)interruptClock;
+	gIVT[2] = (void*)interruptIllegal;
+	gIVT[3] = (void*)interruptMemory;
+	gIVT[4] = (void*)interruptMath;
+	gIVT[5] = (void*)interruptTtyReceive;
+	gIVT[6] = (void*)interruptTtyTransmit;
 	int i;
 	for(i = 7; i < TRAP_VECTOR_SIZE; i++)
-		gIVT[i] = (void*)&interruptDummy;
+		gIVT[i] = (void*)interruptDummy;
 	
 	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
 	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
@@ -154,4 +163,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
+
+	// run idle proces
+	uctx->pc = (void*)DoIdle;
+	uctx->sp = (void*)(dataEnd + 5 * PAGESIZE);
 }
