@@ -3,18 +3,19 @@
 #include <hardware.h>
 #include <load_info.h>
 #include <interrupt_handler.h>
+#include <pagetable.h>
 
 void* globalBrk;
 
-typedef struct pte PageTableEntry;
-unsigned int gNumPagesR0;		// region0 pages
-unsigned int gNumPagesR1;		// region1 pages
+// the global kernel page table
+PageTableEntry gKernelPageTable[NUM_VPN];
 
-// page table address
-unsigned int gR0PtBegin;
-unsigned int gR0PtEnd;
-unsigned int gR1PtBegin;
-unsigned int gR1PtEnd;
+// the global free frame lists
+FrameTableEntry gFreeFrames;
+FrameTableEntry gAllocatedFrames;
+
+unsigned int gNumPagesR0 = NUM_VPN >> 1;
+unsigned int gNumPagesR1 = NUM_VPN >> 1;
 
 // kernel text and data
 unsigned int gKernelDataStart;
@@ -28,9 +29,9 @@ int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual
 
 PageTableEntry* gPageTable;	// initial page tables
 
-unsigned int getKB(unsigned int size) { return size / (1 << 10); }
-unsigned int getMB(unsigned int size) { return size / (1 << 20); }
-unsigned int getGB(unsigned int size) { return size / (1 << 30); }
+unsigned int getKB(unsigned int size) { return size >> 10); }
+unsigned int getMB(unsigned int size) { return size >> 20); }
+unsigned int getGB(unsigned int size) { return size >> 30); }
 
 int SetKernelBrk(void* addr)
 {
@@ -78,7 +79,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
         TracePrintf(0, "\t Argv : %s\n", argv[argc++]);
     }
 
-    TracePrintf(0, "Available memory : %u MB\n", getMB(pmem_size));
+	TracePrintf(0, "Available memory : %u MB\n", getMB(pmem_size));
 	
 	// initialize the IVT
 	// only 7 are valid
@@ -100,26 +101,26 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	
 	// create the initial page tables
 	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;		// compute the total number of frames
-	unsigned int TOTAL_PAGES  = VMEM_SIZE / PAGESIZE;		// compute the total number of pages
-	unsigned int NUM_R0_PAGES = VMEM_0_SIZE / PAGESIZE;	// the total number of pages required for r0
-	unsigned int NUM_R1_PAGES = VMEM_1_SIZE / PAGESIZE;	// the total number of pages required for r1
-	TracePrintf(0, "total frames : %u\n", TOTAL_FRAMES);
-	TracePrintf(0, "total pages  : %u\n", TOTAL_PAGES);
-	TracePrintf(0, "total R0 pages : %u\n", NUM_R0_PAGES);
-	TracePrintf(0, "total R1 pages : %u\n", NUM_R1_PAGES);
-	
 	unsigned int dataStart = (unsigned int)gKernelDataStart;
 	unsigned int dataEnd = (unsigned int)gKernelDataEnd;
 	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
 	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
 	unsigned int textEnd = DOWN_TO_PAGE(dataStart);
-	TracePrintf(0, "Data Start rounded : 0x%08X\n", dataStartRounded);
-	TracePrintf(0, "Data End Rounded : 0x%08X\n", dataEndRounded);
-	
+		
 	unsigned int NUM_TEXT_FRAMES = textEnd / PAGESIZE;
 	unsigned int NUM_DATA_FRAMES = (dataEndRounded - dataStartRounded) / PAGESIZE;
-	unsigned int NUM_R0_FRAMES = TOTAL_FRAMES - 2; 	// lets just have two frames left for region 1			
-	unsigned int NUM_R1_FRAMES = NUM_R0_PAGES;					// lets just have one pa
+	
+	// allocate the first required 'N' frames in allocated
+	int frameNum;
+	for(frameNum = 0; frameNum < NUM_TEXT_FRAMES + NUM_DATA_FRAMES; frameNum++)
+	{
+
+	}
+
+	// allocate the free frames
+	
+
+	// allocate one frame for the kernel stack so as to 
 	
 	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
 	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
@@ -127,38 +128,23 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_FRAMES);
 	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_FRAMES);
 	
-	gPageTable = (PageTableEntry*)malloc(sizeof(PageTableEntry) * TOTAL_PAGES);
-	if(gPageTable != NULL)
+	for(i = 0; i < NUM_TEXT_FRAMES; i++)
 	{
-		int i;
-		for(i = 0; i < NUM_TEXT_FRAMES; i++)
-		{
-			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ|PROT_EXEC;
-			gPageTable[i].pfn = i;
-		}
-		for(i = NUM_TEXT_FRAMES; i < TOTAL_PAGES; i++)
-		{
-			gPageTable[i].valid = 1;
-			gPageTable[i].prot = PROT_READ|PROT_WRITE;
-			gPageTable[i].pfn = i;
-		}
+		gKernelPageTable[i].valid = 1;
+		gKernelPageTable[i].prot = PROT_READ|PROT_EXEC;
+		gKernelPageTable[i].pfn = i;
 	}
-	else
+	for(i = NUM_TEXT_FRAMES; i < TOTAL_PAGES; i++)
 	{
-		TracePrintf(0, "error creating initial page tables\n");		
+		gKernelPageTable[i].valid = 1;
+		gKernelPageTable[i].prot = PROT_READ|PROT_WRITE;
+		gKernelPageTable[i].pfn = i;
 	}
-	
-	// set the limit register values
-	gR0PtBegin = (unsigned int)gPageTable;
-	gR1PtBegin = (unsigned int)(gPageTable + NUM_R0_PAGES);
-	gNumPagesR0 = NUM_R0_PAGES;
-	gNumPagesR1 = NUM_R1_PAGES;
 	
 	// set the page table addresses in the registers
-	WriteRegister(REG_PTBR0, gR0PtBegin);
+	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, gR1PtBegin);
+	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR1);
 	
 	// enable virtual memory
