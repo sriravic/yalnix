@@ -11,8 +11,8 @@ void* globalBrk;
 PageTableEntry gKernelPageTable[NUM_VPN];
 
 // the global free frame lists
-FrameTableEntry gFreeFrames;
-FrameTableEntry gAllocatedFrames;
+FrameTableEntry gFreeFramePool;
+FrameTableEntry gUsedFramePool;
 
 unsigned int gNumPagesR0 = NUM_VPN >> 1;
 unsigned int gNumPagesR1 = NUM_VPN >> 1;
@@ -29,9 +29,9 @@ int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual
 
 PageTableEntry* gPageTable;	// initial page tables
 
-unsigned int getKB(unsigned int size) { return size >> 10); }
-unsigned int getMB(unsigned int size) { return size >> 20); }
-unsigned int getGB(unsigned int size) { return size >> 30); }
+unsigned int getKB(unsigned int size) { return size >> 10; }
+unsigned int getMB(unsigned int size) { return size >> 20; }
+unsigned int getGB(unsigned int size) { return size >> 30; }
 
 int SetKernelBrk(void* addr)
 {
@@ -99,46 +99,105 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 	
-	// create the initial page tables
+	// map the initial page tables and frames
 	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;		// compute the total number of frames
 	unsigned int dataStart = (unsigned int)gKernelDataStart;
 	unsigned int dataEnd = (unsigned int)gKernelDataEnd;
 	unsigned int dataStartRounded = UP_TO_PAGE(dataStart);
 	unsigned int dataEndRounded = UP_TO_PAGE(dataEnd);
 	unsigned int textEnd = DOWN_TO_PAGE(dataStart);
-		
-	unsigned int NUM_TEXT_FRAMES = textEnd / PAGESIZE;
-	unsigned int NUM_DATA_FRAMES = (dataEndRounded - dataStartRounded) / PAGESIZE;
+	unsigned int NUM_TEXT_FRAMES_IN_USE = textEnd / PAGESIZE;
+	unsigned int NUM_DATA_FRAMES_IN_USE = (dataEndRounded - dataStartRounded) / PAGESIZE;
+
+	// first initialize the pools
+	gUsedFramePool.m_head = 1; gFreeFramePool.m_head = 1;
 	
 	// allocate the first required 'N' frames in allocated
 	int frameNum;
-	for(frameNum = 0; frameNum < NUM_TEXT_FRAMES + NUM_DATA_FRAMES; frameNum++)
+	FrameTableEntry curr = gUsedFramePool;
+	for(frameNum = 0; frameNum < NUM_TEXT_FRAMES_IN_USE + NUM_DATA_FRAMES_IN_USE; frameNum++)
 	{
-
+		FrameTableEntry* next = (FrameTableEntry*)malloc(sizeof(FrameTableEntry));
+		if(next != NULL)
+		{
+			next->m_frameNumber = frameNum;
+			next->m_head = 0;
+			next->m_next = NULL;
+			curr.m_next = next;
+			curr = *next;
+		}
+		else
+		{
+			TracePrintf(0, "Unable to allocate memory for used frame pool list - frame : %d\n", frameNum);
+			exit(-1);
+		}
 	}
 
-	// allocate the free frames
-	
+	curr = gFreeFramePool;
+	for(frameNum = NUM_TEXT_FRAMES_IN_USE + NUM_DATA_FRAMES_IN_USE; frameNum < TOTAL_FRAMES; frameNum++)
+	{
+		FrameTableEntry* next = (FrameTableEntry*)malloc(sizeof(FrameTableEntry));
+		if(next != NULL)
+		{
+			next->m_frameNumber = frameNum;
+			next->m_head = 0;
+			next->m_next = NULL;
+			curr.m_next = next;
+			curr = *next;
+		}
+		else
+		{
+			TracePrintf(0, "Unable to allocate memory for free frame pool list - frame : %d\n", frameNum);
+			exit(-1);
+		}
+	}
 
-	// allocate one frame for the kernel stack so as to 
-	
-	TracePrintf(0, "Data end rounded in decimal : %d\n", dataEndRounded);
-	TracePrintf(0, "Page size in decimal : %d\n", PAGESIZE);
-	TracePrintf(0, "Num physical frames : %u\n", TOTAL_FRAMES);
-	TracePrintf(0, "Num Text pages : %u\n", NUM_TEXT_FRAMES);
-	TracePrintf(0, "Num Data pages : %u\n", NUM_DATA_FRAMES);
-	
-	for(i = 0; i < NUM_TEXT_FRAMES; i++)
+	// Initialize the page tables for the kernel
+	// map the used pages to used frames as one-one mapping
+	for(i = 0; i < NUM_TEXT_FRAMES_IN_USE; i++)
 	{
 		gKernelPageTable[i].valid = 1;
 		gKernelPageTable[i].prot = PROT_READ|PROT_EXEC;
 		gKernelPageTable[i].pfn = i;
 	}
-	for(i = NUM_TEXT_FRAMES; i < TOTAL_PAGES; i++)
+	for(i = NUM_TEXT_FRAMES_IN_USE; i < NUM_TEXT_FRAMES_IN_USE + NUM_DATA_FRAMES_IN_USE; i++)
 	{
 		gKernelPageTable[i].valid = 1;
 		gKernelPageTable[i].prot = PROT_READ|PROT_WRITE;
 		gKernelPageTable[i].pfn = i;
+	}
+
+	// Allocate one page for kernel stack region
+	// This has to be in the same spot
+	unsigned int stackIndex = KERNEL_STACK_BASE / PAGESIZE;
+
+	// find the first free frame in the available pool
+	// move it to the end of the used pool list
+	// and assign that frame to this kernel stack page
+	FrameTableEntry* avail = gFreeFramePool.m_next;
+	if(avail != NULL)
+	{
+		// set the head of the avail to point to the correct node now
+		gFreeFramePool.m_next = avail->m_next;
+
+		// iterate through the used list to paste the avail
+		FrameTableEntry* curr = &gUsedFramePool;
+		FrameTableEntry* next = curr->m_next;
+		while(next != NULL)
+		{
+			curr = next;
+			next = next->m_next;
+		}
+
+		// insert the node
+		// and reset the pointers
+		curr->m_next = avail;
+		avail->m_next = NULL;
+
+		// assign this frame number to the pagetable entry
+		gKernelPageTable[stackIndex].valid = 1;
+		gKernelPageTable[stackIndex].prot = PROT_READ | PROT_WRITE;
+		gKernelPageTable[stackIndex].pfn = avail->m_frameNumber;
 	}
 	
 	// set the page table addresses in the registers
