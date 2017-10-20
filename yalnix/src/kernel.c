@@ -190,7 +190,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// Find two frames that are in the free list at STACK_BASE and STACK_BASE - 1
 	// and move them to used list. and allocate the pte entries to these frames
 	// we need this because VM is not enabled yet and hence we have to map one-one
-	FrameTableEntry* curr = &gFreeFramePool;
+	curr = &gFreeFramePool;
 	FrameTableEntry* next = curr->m_next;
 	while(curr != NULL)
 	{
@@ -206,15 +206,27 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			// reassign the pointers
 			curr->m_next = f2->m_next;
 
-			// move to the end of the free list
+			// move to the end of the allocated list
+			FrameTableEntry* currAlloc = &gUsedFramePool;
+			FrameTableEntry* nextAlloc = currAlloc->m_next;
+			while(currAlloc->m_next != NULL)
+			{
+				currAlloc = nextAlloc;
+				nextAlloc = nextAlloc->m_next;
+			}
+
+			currAlloc->m_next = f1;
+			currAlloc->m_next->m_next = f2;
+			f2->m_next = NULL;
 
 			// set ptes
 			gKernelPageTable[stackIndex].valid = 1;
 			gKernelPageTable[stackIndex].prot = PROT_READ|PROT_WRITE;
 			gKernelPageTable[stackIndex].pfn = f1->m_frameNumber;
-			gKernelPageTable[stackIndex - 1].valid = 1;
-			gKernelPageTable[stackIndex - 1].prot = PROT_READ|PROT_WRITE;
-			gKernelPageTable[stackIndex - 1].pfn = f2->m_frameNumber;
+			gKernelPageTable[stackIndex + 1].valid = 1;
+			gKernelPageTable[stackIndex + 1].prot = PROT_READ|PROT_WRITE;
+			gKernelPageTable[stackIndex + 1].pfn = f2->m_frameNumber;
+			break;
 		}
 		else
 		{
@@ -223,10 +235,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		}
 	}
 	
-
-
-	
 	// set the page table addresses in the registers
+	TracePrintf(0, "Num R0 Pages : %u\n", gNumPagesR0);
+	TracePrintf(0, "Num R1 pages : %u\n", gNumPagesR1);
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
 	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable + gNumPagesR0));
@@ -237,8 +248,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	gVMemEnabled = 1;
 
 	// run idle proces
-	// on the top of the VM region - very hacky approach
-	// but still works.
+	// run in the kernel stack region
 	uctx->pc = (void*)DoIdle;
-	uctx->sp = (void*)(VMEM_LIMIT - PAGESIZE);
+	uctx->sp = (void*)(KERNEL_STACK_BASE);
 }
