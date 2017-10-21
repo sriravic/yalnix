@@ -5,6 +5,13 @@
 
 typedef struct pte PageTableEntry;
 
+struct pagetable
+{
+	PageTableEntry m_pte[32];
+};
+
+typedef struct pagetable PageTable;
+
 // this structure is used by the kernel to allocate free frames for the page tables
 struct fte
 {

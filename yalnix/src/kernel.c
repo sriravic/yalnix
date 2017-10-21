@@ -8,7 +8,8 @@
 void* globalBrk;
 
 // the global kernel page table
-PageTableEntry gKernelPageTable[NUM_VPN];
+//PageTableEntry gKernelPageTable[NUM_VPN];
+PageTable gKernelPageTable;
 
 // the global free frame lists
 FrameTableEntry gFreeFramePool;
@@ -171,15 +172,15 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// map the used pages to used frames as one-one mapping
 	for(i = 0; i < TEXT_FRAME_END_PAGENUM; i++)
 	{
-		gKernelPageTable[i].valid = 1;
-		gKernelPageTable[i].prot = PROT_READ|PROT_EXEC;
-		gKernelPageTable[i].pfn = i;
+		gKernelPageTable.m_pte[i].valid = 1;
+		gKernelPageTable.m_pte[i].prot = PROT_READ|PROT_EXEC;
+		gKernelPageTable.m_pte[i].pfn = i;
 	}
 	for(i = TEXT_FRAME_END_PAGENUM; i < NUM_FRAMES_IN_USE; i++)
 	{
-		gKernelPageTable[i].valid = 1;
-		gKernelPageTable[i].prot = PROT_READ|PROT_WRITE;
-		gKernelPageTable[i].pfn = i;
+		gKernelPageTable.m_pte[i].valid = 1;
+		gKernelPageTable.m_pte[i].prot = PROT_READ|PROT_WRITE;
+		gKernelPageTable.m_pte[i].pfn = i;
 	}
 
 	// Allocate one page for kernel stack region
@@ -220,12 +221,12 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			f2->m_next = NULL;
 
 			// set ptes
-			gKernelPageTable[stackIndex].valid = 1;
-			gKernelPageTable[stackIndex].prot = PROT_READ|PROT_WRITE;
-			gKernelPageTable[stackIndex].pfn = f1->m_frameNumber;
-			gKernelPageTable[stackIndex + 1].valid = 1;
-			gKernelPageTable[stackIndex + 1].prot = PROT_READ|PROT_WRITE;
-			gKernelPageTable[stackIndex + 1].pfn = f2->m_frameNumber;
+			gKernelPageTable.m_pte[stackIndex].valid = 1;
+			gKernelPageTable.m_pte[stackIndex].prot = PROT_READ|PROT_WRITE;
+			gKernelPageTable.m_pte[stackIndex].pfn = f1->m_frameNumber;
+			gKernelPageTable.m_pte[stackIndex + 1].valid = 1;
+			gKernelPageTable.m_pte[stackIndex + 1].prot = PROT_READ|PROT_WRITE;
+			gKernelPageTable.m_pte[stackIndex + 1].pfn = f2->m_frameNumber;
 			break;
 		}
 		else
@@ -238,9 +239,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// set the page table addresses in the registers
 	TracePrintf(0, "Num R0 Pages : %u\n", gNumPagesR0);
 	TracePrintf(0, "Num R1 pages : %u\n", gNumPagesR1);
-	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable);
+	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable + gNumPagesR0));
+	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR1);
 	
 	// enable virtual memory
