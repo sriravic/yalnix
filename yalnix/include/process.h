@@ -29,6 +29,7 @@ struct ProcessControlBlock
     ProcessState m_state;       //  state of the process
     UserContext* p_uctx;        //  pointer to the user context
     PageTable* p_pt;            //  pointer to the page table for the process
+    unsigned int brk;           // the brk location of this process.
 };
 
 typedef struct ProcessControlBlock PCB;
