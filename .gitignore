@@ -1,2 +1,13 @@
 *.o
 *~
+*vs_code*
+.gdbinit
+*DISK*
+*.json
+sample/*
+sample/Makefile
+README
+yalnix/sample/Makefile
+*.o
+src/yalnix
+src/idle
