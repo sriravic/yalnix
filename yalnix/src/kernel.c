@@ -1,14 +1,18 @@
-#include <yalnix.h>
 #include <filesystem.h>
 #include <hardware.h>
-#include <load_info.h>
 #include <interrupt_handler.h>
+#include <load_info.h>
 #include <pagetable.h>
+#include <yalnix.h>
+#include <yalnixutils.h>
 
-void* globalBrk;
+
+// set the global pid to zero
+unsigned int gPID = 0;
+
+void* gKernelBrk;
 
 // the global kernel page table
-//PageTableEntry gKernelPageTable[NUM_VPN];
 PageTable gKernelPageTable;
 
 // the global free frame lists
@@ -28,19 +32,13 @@ void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
 
-PageTableEntry* gPageTable;	// initial page tables
-
-unsigned int getKB(unsigned int size) { return size >> 10; }
-unsigned int getMB(unsigned int size) { return size >> 20; }
-unsigned int getGB(unsigned int size) { return size >> 30; }
-
 int SetKernelBrk(void* addr)
 {
 	if(gVMemEnabled == -1)
 	{
 		// virtual memory has not yet been set.
 		TracePrintf(0, "SetKernelBrk : 0x%08X\n", addr);
-		globalBrk = addr;
+		gKernelBrk = addr;
 		return 0;
 	}
 	else
@@ -52,7 +50,7 @@ int SetKernelBrk(void* addr)
 
 void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 {
-    globalBrk = _KernelDataEnd;
+    gKernelBrk = _KernelDataEnd;
     TracePrintf(0, "DataStart  : 0x%08X\n", _KernelDataStart);
     TracePrintf(0, "DataEnd    : 0x%08X\n", _KernelDataEnd);
 
@@ -113,7 +111,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	unsigned int NUM_FRAMES_IN_USE = DATA_FRAME_END_PAGENUM;
 
 	TracePrintf(0, "Data End Address : 0x%08x\n", dataEndRounded);
-	TracePrintf(0, "Global brk : 0x%08x\n",UP_TO_PAGE((unsigned int)globalBrk));
+	TracePrintf(0, "Global brk : 0x%08x\n",UP_TO_PAGE((unsigned int)gKernelBrk));
 	TracePrintf(0, "Text Frame End : %u\n", TEXT_FRAME_END_PAGENUM);
 	TracePrintf(0, "Data Frame End : %u\n", DATA_FRAME_END_PAGENUM);
 
@@ -165,7 +163,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// update the heap allocations if any
-	unsigned int NUM_HEAP_FRAMES_IN_USE = (UP_TO_PAGE((unsigned int)globalBrk) - dataEndRounded) / PAGESIZE;
+	unsigned int NUM_HEAP_FRAMES_IN_USE = (UP_TO_PAGE((unsigned int)gKernelBrk) - dataEndRounded) / PAGESIZE;
 	TracePrintf(0, "Total Heap Frames : %u\n", NUM_HEAP_FRAMES_IN_USE);
 
 	// Initialize the page tables for the kernel
@@ -247,6 +245,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
 	gVMemEnabled = 1;
+
 
 	// run idle proces
 	// run in the kernel stack region

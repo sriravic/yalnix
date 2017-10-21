@@ -21,7 +21,7 @@ void kernelExit(int status) {
 	// Move the calling process to the gDead list
 	// Free all the memory associated with the process
     // Save the status
-    return -1;
+    
 }
 
 // Wait 

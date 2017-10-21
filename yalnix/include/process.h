@@ -10,6 +10,8 @@
 #include <hardware.h>
 #include <pagetable.h>
 
+extern int gPID;       // the global pid counter that can be given to executing processes
+
 enum ProcessState
 {
     PROCESS_START,
@@ -24,8 +26,8 @@ typedef enum ProcessState ProcessState;
 // The process control block is the central structure that allows for the kernel to manage the processes.
 struct ProcessControlBlock
 {
-    unsigned int m_pid;         //  process id of the current running process
-    unsigned int m_ppid;        //  process id of the parent
+    int m_pid;                  //  process id of the current running process
+    int m_ppid;                 //  process id of the parent
     ProcessState m_state;       //  state of the process
     UserContext* p_uctx;        //  pointer to the user context
     PageTable* p_pt;            //  pointer to the page table for the process
@@ -44,11 +46,10 @@ struct ProcessNode
 typedef struct ProcessNode ProcessNode;
 
 // the global list of processes that the kernel will actually manage
-extern ProcessNode* gReadyToRunProcesses;
-extern ProcessNode* gInputBlockedProcesses;
-extern ProcessNode* gOuputBlockedProcesses;
-extern ProcessNode* gSysCallBlockedProcesses;
-extern ProcessNode* gRunningProcesses;
+extern ProcessNode* gStartProcessQ;
+extern ProcessNode* gRunningProcessQ;
+extern ProcessNode* gWaitProcessQ;
+extern ProcessNode* gTerminatedProcessQ;
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode
