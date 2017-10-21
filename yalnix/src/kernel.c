@@ -3,17 +3,17 @@
 #include <interrupt_handler.h>
 #include <load_info.h>
 #include <pagetable.h>
+#include <process.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
 
-
 // set the global pid to zero
-unsigned int gPID = 0;
-
+int gPID = 0;
 void* gKernelBrk;
 
 // the global kernel page table
 PageTable gKernelPageTable;
+unsigned int gKernelSP;					// the address of the kernel stack pointer.
 
 // the global free frame lists
 FrameTableEntry gFreeFramePool;
@@ -25,6 +25,12 @@ unsigned int gNumPagesR1 = NUM_VPN >> 1;
 // kernel text and data
 unsigned int gKernelDataStart;
 unsigned int gKernelDataEnd;
+
+// The global PCBs
+ProcessNode gStartProcessQ;
+ProcessNode gRunningProcessQ;
+ProcessNode gWaitProcessQ;
+ProcessNode gTerminatedProcessQ;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -234,6 +240,10 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		}
 	}
 	
+	// create the initial process queues
+	
+	// Load the process
+
 	// set the page table addresses in the registers
 	TracePrintf(0, "Num R0 Pages : %u\n", gNumPagesR0);
 	TracePrintf(0, "Num R1 pages : %u\n", gNumPagesR1);
@@ -249,6 +259,12 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// run idle proces
 	// run in the kernel stack region
+	// Load the idle process
+	// initialize page tables for idle process
+		// initialize R0 pages
+		// initialize R1 pages
+	// set registers
+	// 
 	uctx->pc = (void*)DoIdle;
 	uctx->sp = (void*)(KERNEL_STACK_BASE);
 }

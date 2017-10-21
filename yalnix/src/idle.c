@@ -9,4 +9,5 @@ int main()
 		TracePrintf(1, "DoIdle Process - PID : %d\n");
 		Pause();
 	}
+	return 0;
 }

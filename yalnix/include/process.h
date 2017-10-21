@@ -29,9 +29,10 @@ struct ProcessControlBlock
     int m_pid;                  //  process id of the current running process
     int m_ppid;                 //  process id of the parent
     ProcessState m_state;       //  state of the process
-    UserContext* p_uctx;        //  pointer to the user context
-    PageTable* p_pt;            //  pointer to the page table for the process
-    unsigned int brk;           // the brk location of this process.
+    UserContext* m_uctx;        //  pointer to the user context
+    PageTable* m_pt;            //  pointer to the page table for the process
+    unsigned int m_brk;           // the brk location of this process.
+    unsigned int m_ticks;       // increment the number of ticks this process has been running for
 };
 
 typedef struct ProcessControlBlock PCB;
@@ -39,17 +40,17 @@ typedef struct ProcessControlBlock PCB;
 // A linked list structure to handle the different processes within the system
 struct ProcessNode
 {
-    pcb_t* m_next;
-    pcb_t* m_prev;
+    PCB* m_next;
+    PCB* m_prev;
 };
 
 typedef struct ProcessNode ProcessNode;
 
 // the global list of processes that the kernel will actually manage
-extern ProcessNode* gStartProcessQ;
-extern ProcessNode* gRunningProcessQ;
-extern ProcessNode* gWaitProcessQ;
-extern ProcessNode* gTerminatedProcessQ;
+extern ProcessNode gStartProcessQ;
+extern ProcessNode gRunningProcessQ;
+extern ProcessNode gWaitProcessQ;
+extern ProcessNode gTerminatedProcessQ;
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode

@@ -112,6 +112,10 @@
  */
 #define	ERROR			    (-1)
 
+#define KILL                (-2)
+
+#define SUCCESS             (0)
+
 /*
  * Server index definitions for Register(index) and Send(msg, -index):
  */

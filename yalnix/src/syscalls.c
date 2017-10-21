@@ -37,7 +37,7 @@ int kernelWait(int *status_ptr) {
 
 int kernelGetPid(void) {
     // Find the pid of the calling process and return it
-    return -1;
+    
 }
 
 // Brk raises or lowers the value of the process's brk to contain addr
