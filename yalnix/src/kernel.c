@@ -7,6 +7,9 @@
 #include <yalnix.h>
 #include <yalnixutils.h>
 
+// some extern functions
+extern int LoadProgram(char *name, char *args[], PCB* pcb);
+
 // set the global pid to zero
 int gPID = 0;
 void* gKernelBrk;
@@ -62,15 +65,6 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 
 	gKernelDataStart = (unsigned int)_KernelDataStart;
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
-}
-
-void DoIdle()
-{
-	while(1)
-	{
-		TracePrintf(1, "DoIdle\n");
-		Pause();
-	}
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
@@ -241,30 +235,57 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 	
 	// create the initial process queues
-	
-	// Load the process
-
-	// set the page table addresses in the registers
-	TracePrintf(0, "Num R0 Pages : %u\n", gNumPagesR0);
-	TracePrintf(0, "Num R1 pages : %u\n", gNumPagesR1);
-	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
-	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
-	WriteRegister(REG_PTLR1, gNumPagesR1);
+	gRunningProcessQ.m_next = NULL; gRunningProcessQ.m_prev = NULL;
+	gTerminatedProcessQ.m_next = NULL; gTerminatedProcessQ.m_prev = NULL;
+	gStartProcessQ.m_next = NULL; gStartProcessQ.m_prev = NULL;
+	gWaitProcessQ.m_next = NULL; gWaitProcessQ.m_prev = NULL;
 	
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
 	gVMemEnabled = 1;
 
+	// Create a page table for the new idle process
+	PageTable* pIdlePT = (PageTable*)malloc(sizeof(PageTable));
+	if(pIdlePT == NULL)
+	{
+		TracePrintf(0, "unable to create page table for idle process");
+		exit(-1);
+	}
 
-	// run idle proces
-	// run in the kernel stack region
-	// Load the idle process
-	// initialize page tables for idle process
-		// initialize R0 pages
-		// initialize R1 pages
-	// set registers
-	// 
-	uctx->pc = (void*)DoIdle;
-	uctx->sp = (void*)(KERNEL_STACK_BASE);
+	// Create a PCB entry 
+	PCB* pIdlePCB = (PCB*)malloc(sizeof(PageTable));
+	if(pIdlePCB == NULL)
+	{
+		TracePrintf(0, "Unable to create pcb entry for idle process");
+		exit(-1);
+	}
+
+	// set the entries in the pcb
+	pIdlePCB->m_pid = gPID++;
+	pIdlePCB->m_ppid = pIdlePCB->m_pid;		// for now this is its own parent
+	pIdlePCB->m_pt = pIdlePT;
+	pIdlePCB->m_uctx = uctx;
+	pIdlePCB->m_state = PROCESS_RUNNING;
+	pIdlePCB->m_ticks = 0;					// 0 for now.
+
+	// add the pcb to running for now
+	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
+	//       and move it to running queue. But we do this for now.
+	gRunningProcessQ.m_prev = NULL;
+	gRunningProcessQ.m_next = pIdlePCB;
+
+	// Call load program
+	int statusCode = LoadProgram(argv[0], &argv[1], pIdlePCB);
+
+	if(statusCode != SUCCESS)
+	{
+		TracePrintf(0, "Error loading the idle process\n");
+		exit(-1);
+	}
+
+	// set the page table addresses in the for idle process and the kernel leaves control.
+	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt);
+	WriteRegister(REG_PTLR0, gNumPagesR0);
+	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt + gNumPagesR0));
+	WriteRegister(REG_PTLR1, gNumPagesR0);
 }

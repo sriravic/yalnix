@@ -11,3 +11,6 @@ yalnix/sample/Makefile
 *.o
 src/yalnix
 src/idle
+yalnix/src/idle
+yalnix/src/yalnix
+yalnix/sample/Makefile

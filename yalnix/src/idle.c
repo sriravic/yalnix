@@ -1,4 +1,3 @@
-#include <hardware.h>
 #include <yalnix.h>
 
 int main()
