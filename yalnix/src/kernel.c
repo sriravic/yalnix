@@ -68,6 +68,24 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
 }
 
+KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
+{
+	PCB* currPCB = (PCB*)curr_pcb_p;
+	PCB* nextPCB = (PCB*)next_pcb_p;
+
+	// allocate a new chunck for the storing the state of the kernel context
+	KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
+	if(nextPCB == NULL && currPCB->m_kctx == NULL)
+	{
+		// this was just to get the current context
+		// copy the context and return the same
+		// and fill in the entries of the currPCB
+		memcpy(ctx, kc_in, sizeof(KernelContext));
+		currPCB->m_kctx = ctx;
+		return ctx;
+	}
+}
+
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
     TracePrintf(0, "KernelStart Function\n");
@@ -308,6 +326,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_ppid = pInitPCB->m_pid;		// for now this is its own parent
 	pInitPCB->m_pt = pInitPT;
 	pInitPCB->m_uctx = pInitUC;
+	pInitPCB->m_kctx = NULL;
 	pInitPCB->m_state = PROCESS_RUNNING;
 	pInitPCB->m_ticks = 0;					// 0 for now.
 

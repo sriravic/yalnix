@@ -3,6 +3,7 @@
 #include <syscalls.h>
 #include <yalnix.h>
  
+extern KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 // Interrupt handler for kernel syscalls
 void interruptKernel(UserContext* ctx)
@@ -53,6 +54,15 @@ void interruptClock(UserContext* ctx)
 	if(currRunningPcb->m_ticks > 10)
 	{
 		// schedule logic
+		if(gReadyToRunProcesssQ.m_next != NULL)
+		{
+			TracePrintf(0, "We have a process to schedule out");
+		}
+		else if(gRunningProcessQ.m_kctx == NULL)
+		{
+			// get the current kernel context to have the context available for successful context switch
+			KernelContextSwitch(MyKCS, currRunningPcb, NULL);
+		}
 	}
 }
 
