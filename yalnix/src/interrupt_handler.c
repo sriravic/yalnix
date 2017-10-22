@@ -23,7 +23,8 @@ void interruptKernel(UserContext* ctx)
             break;
         case YALNIX_GETPID:
             {
-                int pid = kernelGetPid();
+				int pid = kernelGetPid();
+				ctx->regs[0] = pid;
             }
             break;
         default:

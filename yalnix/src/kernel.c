@@ -11,7 +11,7 @@
 extern int LoadProgram(char *name, char *args[], PCB* pcb);
 
 // set the global pid to zero
-int gPID = 0;
+int gPID = 1;
 void* gKernelBrk;
 
 // the global kernel page table
