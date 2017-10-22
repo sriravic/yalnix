@@ -53,7 +53,8 @@ int SetKernelBrk(void* addr)
 	else
 	{
 		// virtual memory has been enabled.
-		// the logic will be different
+		// check for correct frames and update the kernel heap page tables
+		TracePrintf(0, "SetkernelBrk called after VM enabled\n");
 	}
 }
 
@@ -240,10 +241,18 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	gStartProcessQ.m_next = NULL; gStartProcessQ.m_prev = NULL;
 	gWaitProcessQ.m_next = NULL; gWaitProcessQ.m_prev = NULL;
 	
+	// Set the page table entries for the kernel in the correct register before enabling
+	// VM
+	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
+	WriteRegister(REG_PTLR0, gNumPagesR0);
+	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
+	WriteRegister(REG_PTLR1, gNumPagesR0);
+
 	// enable virtual memory
 	WriteRegister(REG_VM_ENABLE, 1);
 	gVMemEnabled = 1;
 
+	// Load the program
 	// Create a page table for the new idle process
 	PageTable* pIdlePT = (PageTable*)malloc(sizeof(PageTable));
 	if(pIdlePT == NULL)
@@ -271,7 +280,6 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_pid = gPID++;
 	pIdlePCB->m_ppid = pIdlePCB->m_pid;		// for now this is its own parent
 	pIdlePCB->m_pt = pIdlePT;
-	pIdlePCB->m_uctx = uctx;
 	pIdlePCB->m_state = PROCESS_RUNNING;
 	pIdlePCB->m_ticks = 0;					// 0 for now.
 
@@ -290,9 +298,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
-	// set the page table addresses in the for idle process and the kernel leaves control.
 	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
 	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR0);
+	uctx = pIdlePCB->m_uctx;
 }
