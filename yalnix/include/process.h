@@ -30,7 +30,6 @@ struct ProcessControlBlock
     int m_ppid;                 //  process id of the parent
     ProcessState m_state;       //  state of the process
     UserContext* m_uctx;        //  pointer to the user context
-    KernelContext* m_kctx;      //  pointer to the kernel context
     PageTable* m_pt;            //  pointer to the page table for the process
     unsigned int m_brk;           // the brk location of this process.
     unsigned int m_ticks;       // increment the number of ticks this process has been running for
