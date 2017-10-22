@@ -164,25 +164,50 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // of the new process.
 
     PageTable* pt = pcb->m_pt;
+    int region;
+    
+    // invalidate all the pages for region 1
+    // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
+    for(region = NUM_VPN >> 1; region < NUM_VPN; region++)
+    {
+        if(pt->m_pte[region].valid == 1)
+        {
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].m_frameNumber);
+            pt->m_pte[region].valid = 0;
+        }
+        
+    }
 
     // Allocate "li.t_npg" physical pages and map them starting at
     // the "text_pg1" page in region 1 address space.  
     // These pages should be marked valid, with a protection of 
     // (PROT_READ | PROT_WRITE).
     int pg;
-    for(pg = 0; pg < li.t_npg; pg++)
+    int allocPages = 0;
+    unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
+    for(pg = text_pg1 + r1offset; pg < NUM_VPN && curr != NULL && allocPages < li.t_npg; pg++)
     {
-        // iterate through the free header list
-        // find so many frames as required
-        // map them to the current paeg table
-
+        pt->m_pte[pg].valid = 1;
+        pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+        FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        pt->m_pte[pg].pfn = frame->m_frameNumber;
+        allocPages++;
     }
-
 
     // Allocate "data_npg" physical pages and map them starting at
     // the  "data_pg1" in region 1 address space.  
     // These pages should be marked valid, with a protection of 
     // (PROT_READ | PROT_WRITE).
+    allocPages = 0;
+    for(pg = data_pg1 + r1offset; pg < NUM_VPN && curr != NULL && allocPages < data_npg; pg++)
+    {
+        pt->m_pte[pg].valid = 1;
+        pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+        FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        pt->m_pte[pg].pfn = frame->m_frameNumber;
+        allocPages++;
+    }
+
     /*
     * Allocate memory for the user stack too.
     */
@@ -190,11 +215,21 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // of the region 1 virtual address space.
     // These pages should be marked valid, with a
     // protection of (PROT_READ | PROT_WRITE).
+    allocPages = 0;
+    for(pg = NUM_VPN - 1; pg > r1offset && curr != NULL && allocPages < stack_npg; pg--)
+    {
+        pt->m_pte[pg].valid = 1;
+        pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+        FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        pt->m_pte[pg].pfn = frame->m_frameNumber;
+        allocPages++;
+    }
 
     /*
     * All pages for the new address space are now in the page table.  
     * But they are not yet in the TLB, remember!
     */
+
     /*
     * Read the text from the file into memory.
     */
@@ -234,6 +269,13 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // invalidate their entries in the TLB or write the updated entries
     // into the TLB.  It's nice for the TLB and the page tables to remain
     // consistent.
+    for(pg = r1offset; pg < li.t_npg; pg++)
+    {
+        pt->m_pt[pg]->prot = PROT_READ | PROT_EXEC;
+    }
+
+    // flush region1 TLB
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
     close(fd);			/* we've read it all now */
 
