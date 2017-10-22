@@ -25,9 +25,8 @@ void interruptKernel(UserContext* ctx)
             break;
         case YALNIX_GETPID:
             {
-				TracePrintf(1, "Inside GETPID interrupt handler\n");
-				int rc = kernelGetPid();
-				ctx->regs[0] = (u_long)rc;
+				int pid = kernelGetPid();
+				ctx->regs[0] = (u_long)pid;
             }
             break;
         default:

@@ -38,8 +38,8 @@ int kernelWait(int *status_ptr) {
 
 int kernelGetPid(void) {
 	// Find the pid of the calling process and return it
-	PCB* currPcb = gRunningProcessQ.m_next;
-	return currPcb->m_pid;
+	PCB* currPCB = gRunningProcessQ.m_next;
+	return currPCB->m_pid;
 }
 
 // Brk raises or lowers the value of the process's brk to contain addr
