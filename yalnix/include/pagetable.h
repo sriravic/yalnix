@@ -7,7 +7,7 @@ typedef struct pte PageTableEntry;
 
 struct pagetable
 {
-	PageTableEntry m_pte[32];
+	PageTableEntry m_pte[NUM_VPN];
 };
 
 typedef struct pagetable PageTable;

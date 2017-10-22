@@ -71,7 +71,11 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
     TracePrintf(0, "KernelStart Function\n");
-    
+	
+	// zero out the kernel page tables
+	int i;
+	memset(gKernelPageTable.m_pte, 0, sizeof(PageTable));
+
     // parse the argvs
     int argc = 0;
     while(argv[argc] != NULL)
@@ -91,7 +95,6 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	gIVT[4] = (void*)interruptMath;
 	gIVT[5] = (void*)interruptTtyReceive;
 	gIVT[6] = (void*)interruptTtyTransmit;
-	int i;
 	for(i = 7; i < TRAP_VECTOR_SIZE; i++)
 		gIVT[i] = (void*)interruptDummy;
 	
@@ -190,33 +193,33 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// Find two frames that are in the free list at STACK_BASE and STACK_BASE - 1
 	// and move them to used list. and allocate the pte entries to these frames
 	// we need this because VM is not enabled yet and hence we have to map one-one
-	curr = &gFreeFramePool;
-	FrameTableEntry* next = curr->m_next;
+	FrameTableEntry* prev = gFreeFramePool.m_next;
+	curr = prev;
 	while(curr != NULL)
 	{
-		if(next->m_frameNumber == stackIndex)
+		if(curr->m_frameNumber == stackIndex)
 		{
 			// remove this frame and the next frame and move it to the other used pool
-			FrameTableEntry* f1 = next;
-			FrameTableEntry* f2 = next->m_next;
+			FrameTableEntry* f1 = curr;
+			FrameTableEntry* f2 = curr->m_next;
 
 			TracePrintf(0, "Stack Frame pfn : %u\n", f1->m_frameNumber);
 			TracePrintf(0, "Stack frame pfn : %u\n", f2->m_frameNumber);
 
 			// reassign the pointers
-			curr->m_next = f2->m_next;
+			prev->m_next = f2->m_next;
 
 			// move to the end of the allocated list
-			FrameTableEntry* currAlloc = &gUsedFramePool;
-			FrameTableEntry* nextAlloc = currAlloc->m_next;
-			while(currAlloc->m_next != NULL)
+			FrameTableEntry* prevAlloc = gUsedFramePool.m_next;
+			FrameTableEntry* currAlloc = prevAlloc;
+			while(currAlloc != NULL)
 			{
-				currAlloc = nextAlloc;
-				nextAlloc = nextAlloc->m_next;
+				prevAlloc = currAlloc;
+				currAlloc = currAlloc->m_next;
 			}
 
-			currAlloc->m_next = f1;
-			currAlloc->m_next->m_next = f2;
+			prevAlloc->m_next = f1;
+			prevAlloc->m_next->m_next = f2;
 			f2->m_next = NULL;
 
 			// set ptes
@@ -230,8 +233,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		}
 		else
 		{
-			curr = next;
-			next = next->m_next;
+			prev = curr;
+			curr = curr->m_next;
 		}
 	}
 	
@@ -260,6 +263,10 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		TracePrintf(0, "unable to create page table for idle process");
 		exit(-1);
 	}
+	else
+	{
+		memset(pIdlePT, 0, sizeof(PageTable));
+	}
 
 	// copy the kernel's region0 page entries into this process's ptes
 	for(i = 0; i < gNumPagesR0; i++)
@@ -269,17 +276,38 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// Create a PCB entry 
-	PCB* pIdlePCB = (PCB*)malloc(sizeof(PageTable));
+	PCB* pIdlePCB = (PCB*)malloc(sizeof(PCB));
 	if(pIdlePCB == NULL)
 	{
 		TracePrintf(0, "Unable to create pcb entry for idle process");
 		exit(-1);
 	}
 
+	// Create a user context for the idle program
+	UserContext* pIdleUC = (UserContext*)malloc(sizeof(UserContext));
+	if(pIdleUC == NULL)
+	{
+		TracePrintf(0, "Unable to create user context for idle process");
+		exit(-1);
+	}
+	else
+	{
+		// write out the current context's data into this
+		pIdleUC->vector = uctx->vector;
+		pIdleUC->code = uctx->code;
+		pIdleUC->addr = uctx->addr;
+		pIdleUC->pc = uctx->pc;
+		pIdleUC->sp = uctx->sp;
+		pIdleUC->ebp = uctx->ebp;
+		for(i = 0; i < GREGS; i++)
+			pIdleUC->regs[i] = uctx->regs[i];
+	}
+
 	// set the entries in the pcb
 	pIdlePCB->m_pid = gPID++;
 	pIdlePCB->m_ppid = pIdlePCB->m_pid;		// for now this is its own parent
 	pIdlePCB->m_pt = pIdlePT;
+	pIdlePCB->m_uctx = pIdleUC;
 	pIdlePCB->m_state = PROCESS_RUNNING;
 	pIdlePCB->m_ticks = 0;					// 0 for now.
 
@@ -288,6 +316,13 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	//       and move it to running queue. But we do this for now.
 	gRunningProcessQ.m_prev = NULL;
 	gRunningProcessQ.m_next = pIdlePCB;
+
+	// swap out the page tables
+	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
+	WriteRegister(REG_PTLR0, gNumPagesR0);
+	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
+	WriteRegister(REG_PTLR1, gNumPagesR0);
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
 	// Call load program
 	int statusCode = LoadProgram(argv[0], &argv[1], pIdlePCB);
@@ -298,9 +333,6 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
-	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
-	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
-	WriteRegister(REG_PTLR1, gNumPagesR0);
-	uctx = pIdlePCB->m_uctx;
+	uctx->pc = pIdlePCB->m_uctx->pc;
+	uctx->sp = pIdlePCB->m_uctx->sp;
 }
