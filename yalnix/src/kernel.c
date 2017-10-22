@@ -84,6 +84,10 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 		currPCB->m_kctx = ctx;
 		return ctx;
 	}
+	else
+	{
+
+	}
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
@@ -286,12 +290,20 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		memset(pInitPT, 0, sizeof(PageTable));
 	}
 
-	// copy the kernel's region0 page entries into this process's ptes
-	for(i = 0; i < gNumPagesR0; i++)
+	// copy the kernel's region0 page - STACK FRAME entries into this process's ptes
+	for(i = 0; i < gNumPagesR0 - 2; i++)
 	{
 		if(gKernelPageTable.m_pte[i].valid == 1)
 			pInitPT->m_pte[i] = gKernelPageTable.m_pte[i];
 	}
+
+	// allocate additional two frames for kernel stack of the new process
+	// each process has its own kernel stack that is unique to itself.
+	// it does not share that with other processes.
+	FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	pInitPT->m_pte[stackIndex + 0].valid = 1; pInitPT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
+	pInitPT->m_pte[stackIndex + 1].valid = 1; pInitPT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
 
 	// Create a PCB entry 
 	PCB* pInitPCB = (PCB*)malloc(sizeof(PCB));

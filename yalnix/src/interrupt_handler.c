@@ -57,6 +57,22 @@ void interruptClock(UserContext* ctx)
 		if(gReadyToRunProcesssQ.m_next != NULL)
 		{
 			TracePrintf(0, "We have a process to schedule out");
+			PCB* nextPCB = gReadyToRunProcesssQ.m_next;
+			int rc = KernelContextSwitch(MyKCS, currRunningPcb, nextPCB);
+
+			// swap the two pcbs
+			gRunningProcessQ.m_next = nextPCB;
+			gReadyToRunProcesssQ.m_next = currRunningPcb;
+
+			// set the page tables and registers
+			// flush the region0 - stack frames and region1 - frames
+			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
+			WriteRegister(REG_PTBR1, (unsigned int)nextPCB->m_pt->m_pte + (NUM_VPN >> 1));
+			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+			// update the user context
+			ctx = nextPCB->m_uctx;
 		}
 		else if(currRunningPcb->m_kctx == NULL)
 		{
