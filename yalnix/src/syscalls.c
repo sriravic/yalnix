@@ -1,3 +1,4 @@
+#include <process.h>
 #include <syscalls.h>
 
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
@@ -36,8 +37,9 @@ int kernelWait(int *status_ptr) {
 }
 
 int kernelGetPid(void) {
-    // Find the pid of the calling process and return it
-    
+	// Find the pid of the calling process and return it
+	PCB* currPcb = gRunningProcessQ.m_next;
+	return currPcb->m_pid;
 }
 
 // Brk raises or lowers the value of the process's brk to contain addr
