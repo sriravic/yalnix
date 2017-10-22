@@ -37,7 +37,7 @@ int kernelWait(int *status_ptr) {
 }
 
 int kernelGetPid(void) {
-    // Find the pid of the calling process and return it
+	// Find the pid of the calling process and return it
 	PCB* currPCB = gRunningProcessQ.m_next;
 	return currPCB->m_pid;
 }

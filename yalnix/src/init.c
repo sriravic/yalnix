@@ -6,5 +6,10 @@
 
 int main(int argc, char** argv)
 {
-    return 0;
+    while(1)
+    {
+        int pid = 0;
+        //int pid = GetPid();
+        TracePrintf(2, "init process : %d\n", pid);
+    }
 }

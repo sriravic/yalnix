@@ -1,6 +1,8 @@
 #include <interrupt_handler.h>
+#include <process.h>
 #include <syscalls.h>
 #include <yalnix.h>
+ 
 
 // Interrupt handler for kernel syscalls
 void interruptKernel(UserContext* ctx)
@@ -24,7 +26,7 @@ void interruptKernel(UserContext* ctx)
         case YALNIX_GETPID:
             {
 				int pid = kernelGetPid();
-				ctx->regs[0] = pid;
+				ctx->regs[0] = (u_long)rc;
             }
             break;
         default:
@@ -41,6 +43,17 @@ void interruptClock(UserContext* ctx)
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
+
+	// update the quantum of runtime for the current running process
+	PCB* currRunningPcb = gRunningProcessQ.m_next;
+	currRunningPcb->m_ticks++;
+	
+	// if this process has run for too long 
+	// say 10 ticks, then swap it with a different process in the ready to run queue
+	if(currRunningPcb->m_ticks > 10)
+	{
+		// schedule logic
+	}
 }
 
 // Interrupt handler for illegal instruction

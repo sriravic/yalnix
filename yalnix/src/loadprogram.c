@@ -210,6 +210,9 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
         allocPages++;
     }
 
+    // set the brk of the heap to be the base address of the next page above datasegment
+    pcb->m_brk = pg * PAGESIZE;
+
     /*
     * Allocate memory for the user stack too.
     */
