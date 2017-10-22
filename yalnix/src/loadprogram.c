@@ -1,10 +1,12 @@
 #include <fcntl.h>
-#include <unistd.h>
 #include <hardware.h>
 #include <load_info.h>
 #include <process.h>
 #include <pagetable.h>
+#include <unistd.h>
 #include <yalnix.h>
+#include <yalnixutils.h>
+
 
 extern FrameTableEntry gFreeFramePool;
 extern FrameTableEntry gUsedFramePool;
@@ -172,7 +174,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     {
         if(pt->m_pte[region].valid == 1)
         {
-            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].m_frameNumber);
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].pfn);
             pt->m_pte[region].valid = 0;
         }
         
@@ -185,7 +187,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     int pg;
     int allocPages = 0;
     unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
-    for(pg = text_pg1 + r1offset; pg < NUM_VPN && curr != NULL && allocPages < li.t_npg; pg++)
+    for(pg = text_pg1 + r1offset; pg < NUM_VPN && allocPages < li.t_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -199,7 +201,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a protection of 
     // (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = data_pg1 + r1offset; pg < NUM_VPN && curr != NULL && allocPages < data_npg; pg++)
+    for(pg = data_pg1 + r1offset; pg < NUM_VPN && allocPages < data_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -216,7 +218,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a
     // protection of (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = NUM_VPN - 1; pg > r1offset && curr != NULL && allocPages < stack_npg; pg--)
+    for(pg = NUM_VPN - 1; pg > r1offset && allocPages < stack_npg; pg--)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -271,7 +273,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // consistent.
     for(pg = r1offset; pg < li.t_npg; pg++)
     {
-        pt->m_pt[pg]->prot = PROT_READ | PROT_EXEC;
+        pt->m_pte[pg].prot = PROT_READ | PROT_EXEC;
     }
 
     // flush region1 TLB

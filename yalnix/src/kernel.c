@@ -252,6 +252,13 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
+	// copy the kernel's region0 page entries into this process's ptes
+	for(i = 0; i < gNumPagesR0; i++)
+	{
+		if(gKernelPageTable.m_pte[i].valid == 1)
+			pIdlePT->m_pte[i] = gKernelPageTable.m_pte[i];
+	}
+
 	// Create a PCB entry 
 	PCB* pIdlePCB = (PCB*)malloc(sizeof(PageTable));
 	if(pIdlePCB == NULL)
@@ -284,8 +291,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// set the page table addresses in the for idle process and the kernel leaves control.
-	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt);
+	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt + gNumPagesR0));
+	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR0);
 }
