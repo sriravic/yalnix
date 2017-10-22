@@ -39,7 +39,7 @@ void interruptClock(UserContext* ctx)
 {
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
-	TracePrintf(0, "TRAP_CLOCK\n");
+	TracePrintf(3, "TRAP_CLOCK\n");
 }
 
 // Interrupt handler for illegal instruction

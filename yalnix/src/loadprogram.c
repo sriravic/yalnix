@@ -240,6 +240,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     if (read(fd, (void *) li.t_vaddr, segment_size) != segment_size)
     {
         close(fd);
+        TracePrintf(0, "Copy program text failed\n");
         // KILL is not defined anywhere: it is an error code distinct
         // from ERROR because it requires different action in the caller.
         // Since this error code is internal to your kernel, you get to define it.
@@ -254,6 +255,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     if (read(fd, (void *) li.id_vaddr, segment_size) != segment_size)
     {
         close(fd);
+        TracePrintf(0, "Copy program data failed\n");
         return KILL;
     }
 
@@ -271,7 +273,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // invalidate their entries in the TLB or write the updated entries
     // into the TLB.  It's nice for the TLB and the page tables to remain
     // consistent.
-    for(pg = r1offset; pg < li.t_npg; pg++)
+    for(pg = r1offset; pg < r1offset + li.t_npg; pg++)
     {
         pt->m_pte[pg].prot = PROT_READ | PROT_EXEC;
     }
