@@ -58,7 +58,7 @@ void interruptClock(UserContext* ctx)
 		{
 			TracePrintf(0, "We have a process to schedule out");
 		}
-		else if(gRunningProcessQ.m_kctx == NULL)
+		else if(currRunningPcb->m_kctx == NULL)
 		{
 			// get the current kernel context to have the context available for successful context switch
 			KernelContextSwitch(MyKCS, currRunningPcb, NULL);
