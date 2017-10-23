@@ -11,7 +11,7 @@
 extern int LoadProgram(char *name, char *args[], PCB* pcb);
 
 // set the global pid to zero
-int gPID = 1;
+int gPID = 0;
 void* gKernelBrk;
 
 // the global kernel page table
@@ -73,10 +73,11 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 	PCB* currPCB = (PCB*)curr_pcb_p;
 	PCB* nextPCB = (PCB*)next_pcb_p;
 
-	// allocate a new chunck for the storing the state of the kernel context
-	KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
 	if(nextPCB == NULL && currPCB->m_kctx == NULL)
 	{
+		// allocate a new chunck for the storing the state of the kernel context
+		KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
+
 		// this was just to get the current context
 		// copy the context and return the same
 		// and fill in the entries of the currPCB
@@ -84,10 +85,31 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 		currPCB->m_kctx = ctx;
 		return ctx;
 	}
-	else
+	else if(nextPCB != NULL && nextPCB->m_kctx == NULL && currPCB->m_kctx != NULL)
 	{
-
+		// It might be possible that this 'to-be-run' process is being scheduled to run for the first time
+		// in that case, it might not have a valid kernel context. so allocate memory and zero it out
+		// we might fill it in subsequent runs
+		KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
+		memset(ctx, 0, sizeof(KernelContext));
+		nextPCB->m_kctx = ctx;
 	}
+	else if(nextPCB != NULL && nextPCB->m_kctx == NULL && currPCB->m_kctx == NULL)
+	{
+		// we need two contexts memory
+		KernelContext* ctx1 = (KernelContext*)malloc(sizeof(KernelContext));
+		KernelContext* ctx2 = (KernelContext*)malloc(sizeof(KernelContext));
+		memset(ctx1, 0, sizeof(KernelContext));
+		memset(ctx2, 0, sizeof(KernelContext));
+		currPCB->m_kctx = ctx1;
+		nextPCB->m_kctx = ctx2;
+	}
+
+	// We store the current state in teh current process
+	memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
+
+	// return 'to-be-run' context
+	return nextPCB->m_kctx;
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
@@ -322,7 +344,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 	else
 	{
-		// write out the current context's data into this
+		// write out the current context's data into this user context
 		pInitUC->vector = uctx->vector;
 		pInitUC->code = uctx->code;
 		pInitUC->addr = uctx->addr;
@@ -333,7 +355,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			pInitUC->regs[i] = uctx->regs[i];
 	}
 
-	// set the entries in the pcb
+	// set the entries in the corresponding PCB
 	pInitPCB->m_pid = gPID++;
 	pInitPCB->m_ppid = pInitPCB->m_pid;		// for now this is its own parent
 	pInitPCB->m_pt = pInitPT;
@@ -353,6 +375,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// load program basically copies text, data into virtual addresses. so the pagetables should reflect this.
 	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);
 	WriteRegister(REG_PTBR1, (unsigned int)(pInitPCB->m_pt->m_pte + gNumPagesR0));
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
 	// Call load program
@@ -360,9 +383,111 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	if(statusCode != SUCCESS)
 	{
+		TracePrintf(0, "Error loading the init process\n");
+		exit(-1);
+	}
+	else
+	{
+		// call switch kernel context to get the current kernel context
+		KernelContextSwitch(MyKCS, pInitPCB, NULL);
+	}
+
+	// create the idle program also as above
+	// but add it to the ready to run programs list
+	// also make sure to set the correct page tables before letting this happen so that load can succeed
+	// after that, reset the page table registers to start executing in init's context.
+	// Create a page table for the new idle process
+	PageTable* pIdlePT = (PageTable*)malloc(sizeof(PageTable));
+	if(pIdlePT == NULL)
+	{
+		TracePrintf(0, "unable to create page table for idle process");
+		exit(-1);
+	}
+	else
+	{
+		memset(pIdlePT, 0, sizeof(PageTable));
+	}
+
+	// copy the kernel's region0 page - STACK FRAME entries into this process's ptes
+	for(i = 0; i < gNumPagesR0 - 2; i++)
+	{
+		if(gKernelPageTable.m_pte[i].valid == 1)
+			pIdlePT->m_pte[i] = gKernelPageTable.m_pte[i];
+	}
+
+	// allocate additional two frames for kernel stack of the new process
+	// each process has its own kernel stack that is unique to itself.
+	// it does not share that with other processes.
+	kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	pIdlePT->m_pte[stackIndex + 0].valid = 1; pIdlePT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
+	pIdlePT->m_pte[stackIndex + 1].valid = 1; pIdlePT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
+
+	// Create a PCB entry 
+	PCB* pIdlePCB = (PCB*)malloc(sizeof(PCB));
+	if(pIdlePCB == NULL)
+	{
+		TracePrintf(0, "Unable to create pcb entry for idle process");
+		exit(-1);
+	}
+
+	// Create a user context for the idle program
+	UserContext* pIdleUC = (UserContext*)malloc(sizeof(UserContext));
+	if(pIdleUC == NULL)
+	{
+		TracePrintf(0, "Unable to create user context for idle process");
+		exit(-1);
+	}
+	else
+	{
+		// write out the current context's data into this user context
+		pIdleUC->vector = uctx->vector;
+		pIdleUC->code = uctx->code;
+		pIdleUC->addr = uctx->addr;
+		pIdleUC->pc = uctx->pc;
+		pIdleUC->sp = uctx->sp;
+		pIdleUC->ebp = uctx->ebp;
+		for(i = 0; i < GREGS; i++)
+			pIdleUC->regs[i] = uctx->regs[i];
+	}
+
+	// set the entries in the corresponding PCB
+	pIdlePCB->m_pid = gPID++;
+	pIdlePCB->m_ppid = pIdlePCB->m_pid;		// for now this is its own parent
+	pIdlePCB->m_pt = pIdlePT;
+	pIdlePCB->m_uctx = pIdleUC;
+	pIdlePCB->m_kctx = NULL;
+	pIdlePCB->m_state = PROCESS_READY;
+	pIdlePCB->m_ticks = 0;					// 0 for now.
+
+	// reset to idle's pagetables for successfulyl loading
+	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
+	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+	char idleprog[] = "idle";
+	char* tempargs[] = {NULL};
+	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
+	
+	if(statusCode != SUCCESS)
+	{
 		TracePrintf(0, "Error loading the idle process\n");
 		exit(-1);
 	}
+	else
+	{
+		KernelContextSwitch(MyKCS, pIdlePCB, NULL);
+	}
+
+	// add this to ready to run queue
+	gReadyToRunProcesssQ.m_next = pIdlePCB;
+
+	// Reset to init's page tables
+	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);
+	WriteRegister(REG_PTBR1, (unsigned int)(pInitPCB->m_pt->m_pte + gNumPagesR0));
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
 	// start running from this process.
 	uctx->pc = pInitPCB->m_uctx->pc;

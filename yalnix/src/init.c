@@ -6,9 +6,9 @@
 
 int main(int argc, char** argv)
 {
+    int pid = GetPid();
     while(1)
     {
-        int pid = GetPid();
         TracePrintf(2, "init process : %d\n", pid);
     }
 }

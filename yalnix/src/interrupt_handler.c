@@ -2,7 +2,9 @@
 #include <process.h>
 #include <syscalls.h>
 #include <yalnix.h>
- 
+
+int debug = 1;
+
 extern KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 // Interrupt handler for kernel syscalls
@@ -44,14 +46,27 @@ void interruptClock(UserContext* ctx)
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
+	if(debug == 2)
+		TracePrintf(0, "WHOA.!!\n");
 
 	// update the quantum of runtime for the current running process
 	PCB* currRunningPcb = gRunningProcessQ.m_next;
 	currRunningPcb->m_ticks++;
+
+	if(currRunningPcb->m_kctx == NULL)
+	{
+		// get the first kernel context
+		int rc = KernelContextSwitch(MyKCS, currRunningPcb, NULL);
+		if(rc == -1)
+		{
+			TracePrintf(0, "Getting first context failed");
+			exit(-1);
+		}
+	}
 	
 	// if this process has run for too long 
-	// say 10 ticks, then swap it with a different process in the ready to run queue
-	if(currRunningPcb->m_ticks > 10)
+	// say 3 ticks, then swap it with a different process in the ready to run queue
+	if(currRunningPcb->m_ticks > 2)
 	{
 		// schedule logic
 		if(gReadyToRunProcesssQ.m_next != NULL)
@@ -59,6 +74,11 @@ void interruptClock(UserContext* ctx)
 			TracePrintf(0, "We have a process to schedule out");
 			PCB* nextPCB = gReadyToRunProcesssQ.m_next;
 			int rc = KernelContextSwitch(MyKCS, currRunningPcb, nextPCB);
+			if(rc == -1)
+			{
+				TracePrintf(0, "Kernel Context switch failed\n");
+				exit(-1);
+			}
 
 			// swap the two pcbs
 			gRunningProcessQ.m_next = nextPCB;
@@ -67,12 +87,16 @@ void interruptClock(UserContext* ctx)
 			// set the page tables and registers
 			// flush the region0 - stack frames and region1 - frames
 			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
+			WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
 			WriteRegister(REG_PTBR1, (unsigned int)nextPCB->m_pt->m_pte + (NUM_VPN >> 1));
+			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
 			// update the user context
+			currRunningPcb->m_ticks = 0;	// reset ticks
 			ctx = nextPCB->m_uctx;
+			debug = 2;
 		}
 		else if(currRunningPcb->m_kctx == NULL)
 		{
