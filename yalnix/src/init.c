@@ -10,5 +10,6 @@ int main(int argc, char** argv)
     while(1)
     {
         TracePrintf(2, "init process : %d\n", pid);
+        Delay(10);
     }
 }

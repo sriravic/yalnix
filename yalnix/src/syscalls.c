@@ -1,5 +1,5 @@
 #include <process.h>
-#include <syscalls.h>
+#include <yalnix.h>
 
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void) {
@@ -22,14 +22,14 @@ void kernelExit(int status) {
 	// Move the calling process to the gDead list
 	// Free all the memory associated with the process
     // Save the status
-    
+
 }
 
-// Wait 
+// Wait
 int kernelWait(int *status_ptr) {
 	// If the calling process has no children or has a child that is already dead, return ERROR
 	// Move the calling process to the gSyscallBlocked list
-	// Wait for the processes child to Exit() 
+	// Wait for the processes child to Exit()
 	// Save the child's exit status to status_ptr
 	// Move the calling process from the gSyscallBlocked list to the gReadyToRun list
     // Return the childs pid
@@ -54,8 +54,21 @@ int kernelBrk(void *addr) {
 
 // Delay pauses the process for a time of clock_ticks
 int kernelDelay(int clock_ticks) {
-    // Move the calling process to the gSleepBlocked list
-    return -1;
+    TracePrintf(0, "kernalDelay called\n");
+    if(clock_ticks < 0)
+      return ERROR;
+    else if (clock_ticks == 0)
+      return SUCCESS;
+    else {
+      // Move the running process to the sleep queue
+      PCB* currPCB = gRunningProcessQ.m_next;
+      currPCB->m_timeToSleep = clock_ticks;
+      gSleepBlockedQ.m_next = currPCB;
+      gRunningProcessQ.m_next = NULL;
+      TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
+
+      return SUCCESS;
+    }
 }
 
 // TTYRead reads from the terminal tty_id
@@ -110,7 +123,7 @@ int kernelLockInit(int *lock_idp) {
 }
 
 int kernelAcquire(int lock_id) {
-	// if the lock is free, update the lock's holder 
+	// if the lock is free, update the lock's holder
     // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
     return -1;
 }

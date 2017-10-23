@@ -31,9 +31,10 @@ unsigned int gKernelDataEnd;
 
 // The global PCBs
 ProcessNode gRunningProcessQ;
-ProcessNode gReadyToRunProcesssQ;
+ProcessNode gReadyToRunProcessQ;
 ProcessNode gWaitProcessQ;
 ProcessNode gTerminatedProcessQ;
+ProcessNode gSleepBlockedQ;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -104,7 +105,7 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
     TracePrintf(0, "KernelStart Function\n");
-	
+
 	// zero out the kernel page tables
 	int i;
 	memset(gKernelPageTable.m_pte, 0, sizeof(PageTable));
@@ -117,7 +118,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
     }
 
 	TracePrintf(0, "Available memory : %u MB\n", getMB(pmem_size));
-	
+
 	// initialize the IVT
 	// only 7 are valid
 	// setting the rest to the dummy interrupt handler
@@ -130,11 +131,11 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	gIVT[6] = (void*)interruptTtyTransmit;
 	for(i = 7; i < TRAP_VECTOR_SIZE; i++)
 		gIVT[i] = (void*)interruptDummy;
-	
+
 	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
 	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
-	
+
 	// map the initial page tables and frames
 	unsigned int TOTAL_FRAMES = pmem_size / PAGESIZE;		// compute the total number of frames
 	unsigned int dataStart = (unsigned int)gKernelDataStart;
@@ -158,7 +159,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// first initialize the pools
 	gUsedFramePool.m_head = 1; gFreeFramePool.m_head = 1;
-	
+
 	// allocate the first required 'N' frames in allocated
 	int frameNum;
 	FrameTableEntry* curr = &gUsedFramePool;
@@ -270,13 +271,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			curr = curr->m_next;
 		}
 	}
-	
+
 	// create the initial process queues
 	gRunningProcessQ.m_next = NULL; gRunningProcessQ.m_prev = NULL;
 	gTerminatedProcessQ.m_next = NULL; gTerminatedProcessQ.m_prev = NULL;
-	gReadyToRunProcesssQ.m_next = NULL; gReadyToRunProcesssQ.m_prev = NULL;
+	gReadyToRunProcessQ.m_next = NULL; gReadyToRunProcessQ.m_prev = NULL;
 	gWaitProcessQ.m_next = NULL; gWaitProcessQ.m_prev = NULL;
-	
+	gSleepBlockedQ.m_next = NULL; gSleepBlockedQ.m_prev = NULL;
+
 	// Set the page table entries for the kernel in the correct register before enabling
 	// VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
@@ -316,7 +318,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPT->m_pte[stackIndex + 0].valid = 1; pInitPT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
 	pInitPT->m_pte[stackIndex + 1].valid = 1; pInitPT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
 
-	// Create a PCB entry 
+	// Create a PCB entry
 	PCB* pInitPCB = (PCB*)malloc(sizeof(PCB));
 	if(pInitPCB == NULL)
 	{
@@ -352,6 +354,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_kctx = NULL;
 	pInitPCB->m_state = PROCESS_RUNNING;
 	pInitPCB->m_ticks = 0;					// 0 for now.
+	pInitPCB->m_timeToSleep = 0;
 
 	// add the pcb to running for now
 	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
@@ -378,7 +381,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	else
 	{
 		// call switch kernel context to get the current kernel context
-		//KernelContextSwitch(MyKCS, pInitPCB, NULL);
+		KernelContextSwitch(MyKCS, pInitPCB, NULL);
 	}
 
 	// create the idle program also as above
@@ -412,7 +415,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePT->m_pte[stackIndex + 0].valid = 1; pIdlePT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
 	pIdlePT->m_pte[stackIndex + 1].valid = 1; pIdlePT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
 
-	// Create a PCB entry 
+	// Create a PCB entry
 	PCB* pIdlePCB = (PCB*)malloc(sizeof(PCB));
 	if(pIdlePCB == NULL)
 	{
@@ -448,6 +451,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_kctx = NULL;
 	pIdlePCB->m_state = PROCESS_READY;
 	pIdlePCB->m_ticks = 0;					// 0 for now.
+	pIdlePCB->m_timeToSleep = 0;
 
 	// reset to idle's pagetables for successfulyl loading
 	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
@@ -458,7 +462,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	char idleprog[] = "idle";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
-	
+
 	if(statusCode != SUCCESS)
 	{
 		TracePrintf(0, "Error loading the idle process\n");
@@ -470,7 +474,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// add this to ready to run queue
-	gReadyToRunProcesssQ.m_next = pIdlePCB;
+	gReadyToRunProcessQ.m_next = pIdlePCB;
 
 	// Reset to init's page tables
 	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);
