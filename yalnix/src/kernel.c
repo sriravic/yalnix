@@ -85,31 +85,20 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 		currPCB->m_kctx = ctx;
 		return ctx;
 	}
-	else if(nextPCB != NULL && nextPCB->m_kctx == NULL && currPCB->m_kctx != NULL)
+	else if(currPCB != NULL && nextPCB != NULL)
 	{
-		// It might be possible that this 'to-be-run' process is being scheduled to run for the first time
-		// in that case, it might not have a valid kernel context. so allocate memory and zero it out
-		// we might fill it in subsequent runs
-		KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
-		memset(ctx, 0, sizeof(KernelContext));
-		nextPCB->m_kctx = ctx;
+
+		// We store the current state in teh current process
+		memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
+
+		// return 'to-be-run' context
+		return currPCB->m_kctx;
 	}
-	else if(nextPCB != NULL && nextPCB->m_kctx == NULL && currPCB->m_kctx == NULL)
+	else
 	{
-		// we need two contexts memory
-		KernelContext* ctx1 = (KernelContext*)malloc(sizeof(KernelContext));
-		KernelContext* ctx2 = (KernelContext*)malloc(sizeof(KernelContext));
-		memset(ctx1, 0, sizeof(KernelContext));
-		memset(ctx2, 0, sizeof(KernelContext));
-		currPCB->m_kctx = ctx1;
-		nextPCB->m_kctx = ctx2;
+		TracePrintf(0, "Weird scenario - Returning NULL kernel context\n");
+		return NULL;
 	}
-
-	// We store the current state in teh current process
-	memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
-
-	// return 'to-be-run' context
-	return nextPCB->m_kctx;
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
@@ -335,7 +324,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
-	// Create a user context for the idle program
+	// Create a user context for the init program
 	UserContext* pInitUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pInitUC == NULL)
 	{
@@ -389,7 +378,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	else
 	{
 		// call switch kernel context to get the current kernel context
-		KernelContextSwitch(MyKCS, pInitPCB, NULL);
+		//KernelContextSwitch(MyKCS, pInitPCB, NULL);
 	}
 
 	// create the idle program also as above
@@ -477,7 +466,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 	else
 	{
-		KernelContextSwitch(MyKCS, pIdlePCB, NULL);
+		//KernelContextSwitch(MyKCS, pIdlePCB, NULL);
 	}
 
 	// add this to ready to run queue

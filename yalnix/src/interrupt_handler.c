@@ -47,8 +47,10 @@ void interruptClock(UserContext* ctx)
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
 	if(debug == 2)
+	{
+		debug = 0;
 		TracePrintf(0, "WHOA.!!\n");
-
+	}
 	// update the quantum of runtime for the current running process
 	PCB* currPCB = gRunningProcessQ.m_next;
 	currPCB->m_ticks++;
@@ -81,23 +83,18 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
-			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
-			gRunningProcessQ.m_next = nextPCB;
-			gReadyToRunProcesssQ.m_next = currPCB;
+			//gRunningProcessQ.m_next = nextPCB;
+			//gReadyToRunProcesssQ.m_next = currPCB;
 
-			// update the user context
-			currPCB->m_ticks = 0;	// reset ticks
-
-			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-			
-			// set the page tables and registers
-			// flush the region0 - stack frames and region1 - frames
-			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
+			WriteRegister(REG_PTBR0, (unsigned int)currPCB->m_pt->m_pte);
 			WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-			WriteRegister(REG_PTBR1, (unsigned int)nextPCB->m_pt->m_pte + (NUM_VPN >> 1));
+			WriteRegister(REG_PTBR1, (unsigned int)(currPCB->m_pt->m_pte + (NUM_VPN >> 1)));
 			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+			// update the user context
+			currPCB->m_ticks = 0;	// reset ticks
 			debug = 2;
 			return;
 		}
@@ -131,7 +128,13 @@ void interruptMemory(UserContext* ctx)
 		// update the sbrk/brk values for the process
 	// If at any point the stack grows into the heap,
 		// log and quit the process.
-		
+	unsigned int loc = (unsigned int)ctx->addr;
+	unsigned int pg = (loc) / PAGESIZE;
+	unsigned int nextpg = UP_TO_PAGE(loc) / PAGESIZE;
+	unsigned int lowpg = DOWN_TO_PAGE(loc) / PAGESIZE;
+	PCB* currPCB = gRunningProcessQ.m_next;
+	TracePrintf(0, "Trap location : 0X%08X\n", (unsigned int)ctx->addr);
+	TracePrintf(0, "Max VM location : 0x%08X\n", VMEM_1_LIMIT);
 	TracePrintf(0, "TRAP_MEMORY.\n");
 }
 
