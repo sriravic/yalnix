@@ -50,13 +50,13 @@ void interruptClock(UserContext* ctx)
 		TracePrintf(0, "WHOA.!!\n");
 
 	// update the quantum of runtime for the current running process
-	PCB* currRunningPcb = gRunningProcessQ.m_next;
-	currRunningPcb->m_ticks++;
+	PCB* currPCB = gRunningProcessQ.m_next;
+	currPCB->m_ticks++;
 
-	if(currRunningPcb->m_kctx == NULL)
+	if(currPCB->m_kctx == NULL)
 	{
 		// get the first kernel context
-		int rc = KernelContextSwitch(MyKCS, currRunningPcb, NULL);
+		int rc = KernelContextSwitch(MyKCS, currPCB, NULL);
 		if(rc == -1)
 		{
 			TracePrintf(0, "Getting first context failed");
@@ -66,14 +66,14 @@ void interruptClock(UserContext* ctx)
 	
 	// if this process has run for too long 
 	// say 3 ticks, then swap it with a different process in the ready to run queue
-	if(currRunningPcb->m_ticks > 2)
+	if(currPCB->m_ticks > 2)
 	{
 		// schedule logic
 		if(gReadyToRunProcesssQ.m_next != NULL)
 		{
 			TracePrintf(0, "We have a process to schedule out");
 			PCB* nextPCB = gReadyToRunProcesssQ.m_next;
-			int rc = KernelContextSwitch(MyKCS, currRunningPcb, nextPCB);
+			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
 			if(rc == -1)
 			{
 				TracePrintf(0, "Kernel Context switch failed\n");
@@ -81,9 +81,15 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
+			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 			gRunningProcessQ.m_next = nextPCB;
-			gReadyToRunProcesssQ.m_next = currRunningPcb;
+			gReadyToRunProcesssQ.m_next = currPCB;
 
+			// update the user context
+			currPCB->m_ticks = 0;	// reset ticks
+
+			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+			
 			// set the page tables and registers
 			// flush the region0 - stack frames and region1 - frames
 			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
@@ -92,16 +98,13 @@ void interruptClock(UserContext* ctx)
 			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
-
-			// update the user context
-			currRunningPcb->m_ticks = 0;	// reset ticks
-			ctx = nextPCB->m_uctx;
 			debug = 2;
+			return;
 		}
-		else if(currRunningPcb->m_kctx == NULL)
+		else if(currPCB->m_kctx == NULL)
 		{
 			// get the current kernel context to have the context available for successful context switch
-			KernelContextSwitch(MyKCS, currRunningPcb, NULL);
+			KernelContextSwitch(MyKCS, currPCB, NULL);
 		}
 	}
 }
