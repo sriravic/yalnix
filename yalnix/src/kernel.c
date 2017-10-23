@@ -92,7 +92,7 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 		memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
 
 		// return 'to-be-run' context
-		return currPCB->m_kctx;
+		return nextPCB->m_kctx;
 	}
 	else
 	{
@@ -378,7 +378,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	else
 	{
 		// call switch kernel context to get the current kernel context
-		//KernelContextSwitch(MyKCS, pInitPCB, NULL);
+		KernelContextSwitch(MyKCS, pInitPCB, NULL);
 	}
 
 	// create the idle program also as above
@@ -466,7 +466,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 	else
 	{
-		//KernelContextSwitch(MyKCS, pIdlePCB, NULL);
+		KernelContextSwitch(MyKCS, pIdlePCB, NULL);
 	}
 
 	// add this to ready to run queue

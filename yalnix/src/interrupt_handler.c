@@ -73,6 +73,7 @@ void interruptClock(UserContext* ctx)
 		// schedule logic
 		if(gReadyToRunProcesssQ.m_next != NULL)
 		{
+			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 			TracePrintf(0, "We have a process to schedule out");
 			PCB* nextPCB = gReadyToRunProcesssQ.m_next;
 			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
@@ -83,18 +84,20 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
-			//gRunningProcessQ.m_next = nextPCB;
-			//gReadyToRunProcesssQ.m_next = currPCB;
+			gRunningProcessQ.m_next = nextPCB;
+			gReadyToRunProcesssQ.m_next = currPCB;
 
-			WriteRegister(REG_PTBR0, (unsigned int)currPCB->m_pt->m_pte);
+			// swap out the page tables
+			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
 			WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-			WriteRegister(REG_PTBR1, (unsigned int)(currPCB->m_pt->m_pte + (NUM_VPN >> 1)));
+			WriteRegister(REG_PTBR1, (unsigned int)(nextPCB->m_pt->m_pte + (NUM_VPN >> 1)));
 			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
 			// update the user context
 			currPCB->m_ticks = 0;	// reset ticks
+			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
 			debug = 2;
 			return;
 		}
