@@ -46,11 +46,7 @@ void interruptClock(UserContext* ctx)
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
-	if(debug == 2)
-	{
-		debug = 0;
-		TracePrintf(0, "WHOA.!!\n");
-	}
+	
 	// update the quantum of runtime for the current running process
 	PCB* currPCB = gRunningProcessQ.m_next;
 	currPCB->m_ticks++;
@@ -75,6 +71,10 @@ void interruptClock(UserContext* ctx)
 		{
 			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 			TracePrintf(0, "We have a process to schedule out");
+
+			// update the user context
+			currPCB->m_ticks = 0;	// reset ticks
+
 			PCB* nextPCB = gReadyToRunProcesssQ.m_next;
 			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
 			if(rc == -1)
@@ -94,15 +94,13 @@ void interruptClock(UserContext* ctx)
 			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
-
-			// update the user context
-			currPCB->m_ticks = 0;	// reset ticks
+			
 			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-			debug = 2;
 			return;
 		}
 		else if(currPCB->m_kctx == NULL)
 		{
+			// THIS BRANCH IS PROBABLY A DEAD BRANCH
 			// get the current kernel context to have the context available for successful context switch
 			KernelContextSwitch(MyKCS, currPCB, NULL);
 		}
