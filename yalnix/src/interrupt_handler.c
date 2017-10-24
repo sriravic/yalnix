@@ -20,10 +20,12 @@ void interruptKernel(UserContext* ctx)
                 // move the process to the wait queue
                 // try to find some other process to run in its place
             }
-        break;
+        	break;
         case YALNIX_BRK:
             {
-                // update the logic for brk within the process's addresspace
+							void* addr = (void *)ctx->regs[0];
+							TracePrintf(2, "Brk address is: %x\n", addr);
+              kernelBrk(addr);
             }
             break;
         case YALNIX_GETPID:

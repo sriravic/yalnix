@@ -22,4 +22,7 @@ struct fte
 
 typedef struct fte FrameTableEntry;
 
+extern FrameTableEntry gFreeFramePool;
+extern FrameTableEntry gUsedFramePool;
+
 #endif

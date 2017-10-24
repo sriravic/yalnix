@@ -14,6 +14,6 @@ static inline unsigned int getGB(unsigned int size) { return size >> 30; }
 FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool);
 
 // finds the node for framenum and removes it from the used pool and moves it to the free frames
-void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, int frameNum);
+void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigned int frameNum);
 
 #endif

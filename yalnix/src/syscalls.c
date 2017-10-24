@@ -44,12 +44,55 @@ int kernelGetPid(void) {
 
 // Brk raises or lowers the value of the process's brk to contain addr
 int kernelBrk(void *addr) {
-	// Compare addr to the calling process's brk
-	// If addr is greater than the brk
-		// Allocate memory until it covers addr
-	// Else deallocate memory until the highest addres is addr rounded up to the nearest multiple of page size
-    // Set the process's brk to addr
-    return -1;
+  unsigned int newAddr = (unsigned int)addr;
+
+  // cannot allocate Region 0 memory
+  if(newAddr < VMEM_1_BASE)
+    return ERROR;
+
+  PCB* currPCB = gRunningProcessQ.m_next;
+  PageTable* currPt = currPCB->m_pt;
+  unsigned int currBrk = currPCB->m_brk;
+  unsigned int brkPgNum = currBrk/PAGESIZE;
+  TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
+
+  unsigned int delta;
+  unsigned int pgDiff;
+  int i;
+
+  if(newAddr >= currBrk)
+  {
+    // allocate memory
+    delta = (newAddr - currBrk);
+    pgDiff = delta/PAGESIZE;
+    // TODO error handling if we run out of free frames
+    for(i = 1; i <= pgDiff; i++) {
+      FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+      unsigned int pfn = frame->m_frameNumber;
+      currPt->m_pte[brkPgNum+i].valid = 1; currPt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currPt->m_pte[brkPgNum+i].pfn = pfn;
+      TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+    }
+  } else
+  {
+    // deallocate memory
+    delta = (currBrk - newAddr);
+    pgDiff = delta/PAGESIZE;
+    for(i = 0; i < pgDiff; i++)
+    {
+      currPt->m_pte[brkPgNum-i].valid = 0; currPt->m_pte[brkPgNum-i].prot = PROT_NONE;
+      int pfn = currPt->m_pte[brkPgNum-i].pfn;
+      freeOneFrame(&gFreeFramePool, &gUsedFramePool, pfn);
+      TracePrintf(2, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
+    }
+
+    return SUCCESS;
+  }
+
+  TracePrintf(2, "The page difference is: %d\n", pgDiff);
+
+  // set the brk to be the new address
+  currPCB->m_brk = newAddr;
+  return SUCCESS;
 }
 
 // Delay pauses the process for a time of clock_ticks

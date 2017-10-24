@@ -7,7 +7,7 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
     FrameTableEntry* prevA = availPool;
     FrameTableEntry* prevU = usedPool;
     FrameTableEntry* ret = NULL;
-    
+
     // do one sanity check before proceeding
     if(prevA == NULL || prevU == NULL)
     {
@@ -35,7 +35,7 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
     return ret;
 }
 
-void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, int frameNum)
+void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigned int frameNum)
 {
     FrameTableEntry* prev = usedPool;
     FrameTableEntry* curr = usedPool;
