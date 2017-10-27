@@ -9,6 +9,7 @@
 
 #include <hardware.h>
 #include <pagetable.h>
+#include <stdbool.h>
 
 extern int gPID;       // the global pid counter that can be given to executing processes
 
@@ -35,25 +36,35 @@ struct ProcessControlBlock
     unsigned int m_brk;         // the brk location of this process.
     unsigned int m_ticks;       // increment the number of ticks this process has been running for
     unsigned int m_timeToSleep; // how long we expect to sleep for
+    struct ProcessControlBlock* m_next;
+    struct ProcessControlBlock* m_prev;
 };
 
 typedef struct ProcessControlBlock PCB;
 
 // A linked list structure to handle the different processes within the system
-struct ProcessNode
+struct PCBQueue
 {
-    PCB* m_next;
-    PCB* m_prev;
+    PCB* m_head;
+    PCB* m_tail;
+    int m_size;
 };
 
-typedef struct ProcessNode ProcessNode;
+typedef struct PCBQueue PCBQueue;
 
 // the global list of processes that the kernel will actually manage
-extern ProcessNode gRunningProcessQ;
-extern ProcessNode gReadyToRunProcessQ;
-extern ProcessNode gWaitProcessQ;
-extern ProcessNode gTerminatedProcessQ;
-extern ProcessNode gSleepBlockedQ;
+extern PCBQueue gRunningProcessQ;
+extern PCBQueue gReadyToRunProcessQ;
+extern PCBQueue gWaitProcessQ;
+extern PCBQueue gTerminatedProcessQ;
+extern PCBQueue gSleepBlockedQ;
+
+// Function headers defined in process.c
+PCB* processDequeue(PCBQueue Q);
+void processEnqueue(PCBQueue Q, PCB* process);
+PCB* getHeadProcess(PCBQueue Q);
+bool isEmptyProcessQueue(PCBQueue Q);
+int getSizeProcessQueue(PCBQueue Q);
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode

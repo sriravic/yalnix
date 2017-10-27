@@ -30,11 +30,11 @@ unsigned int gKernelDataStart;
 unsigned int gKernelDataEnd;
 
 // The global PCBs
-ProcessNode gRunningProcessQ;
-ProcessNode gReadyToRunProcessQ;
-ProcessNode gWaitProcessQ;
-ProcessNode gTerminatedProcessQ;
-ProcessNode gSleepBlockedQ;
+PCBQueue gRunningProcessQ;
+PCBQueue gReadyToRunProcessQ;
+PCBQueue gWaitProcessQ;
+PCBQueue gTerminatedProcessQ;
+PCBQueue gSleepBlockedQ;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -273,11 +273,11 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// create the initial process queues
-	gRunningProcessQ.m_next = NULL; gRunningProcessQ.m_prev = NULL;
-	gTerminatedProcessQ.m_next = NULL; gTerminatedProcessQ.m_prev = NULL;
-	gReadyToRunProcessQ.m_next = NULL; gReadyToRunProcessQ.m_prev = NULL;
-	gWaitProcessQ.m_next = NULL; gWaitProcessQ.m_prev = NULL;
-	gSleepBlockedQ.m_next = NULL; gSleepBlockedQ.m_prev = NULL;
+	gRunningProcessQ.m_head = NULL; gRunningProcessQ.m_tail = NULL;
+	gTerminatedProcessQ.m_head = NULL; gTerminatedProcessQ.m_tail = NULL;
+	gReadyToRunProcessQ.m_head = NULL; gReadyToRunProcessQ.m_tail = NULL;
+	gWaitProcessQ.m_head = NULL; gWaitProcessQ.m_tail = NULL;
+	gSleepBlockedQ.m_head = NULL; gSleepBlockedQ.m_tail = NULL;
 
 	// Set the page table entries for the kernel in the correct register before enabling
 	// VM
@@ -355,12 +355,15 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_state = PROCESS_RUNNING;
 	pInitPCB->m_ticks = 0;					// 0 for now.
 	pInitPCB->m_timeToSleep = 0;
+	pInitPCB->m_next = NULL;
+	pInitPCB->m_prev = NULL;
 
 	// add the pcb to running for now
 	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
 	//       and move it to running queue. But we do this for now.
-	gRunningProcessQ.m_prev = NULL;
-	gRunningProcessQ.m_next = pInitPCB;
+	//gRunningProcessQ.m_prev = NULL;
+	//gRunningProcessQ.m_next = pInitPCB;
+	processEnqueue(gRunningProcessQ, pInitPCB);
 
 	// swap out the page tables
 	// We need to do this because, further virtual address references have to go to the correct frames
@@ -452,6 +455,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_state = PROCESS_READY;
 	pIdlePCB->m_ticks = 0;					// 0 for now.
 	pIdlePCB->m_timeToSleep = 0;
+	pIdlePCB->m_next = NULL;
+	pIdlePCB->m_prev = NULL;
 
 	// reset to idle's pagetables for successfulyl loading
 	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
@@ -474,7 +479,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// add this to ready to run queue
-	gReadyToRunProcessQ.m_next = pIdlePCB;
+	processEnqueue(gReadyToRunProcessQ, pIdlePCB);
 
 	// Reset to init's page tables
 	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);

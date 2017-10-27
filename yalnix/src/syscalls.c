@@ -6,6 +6,7 @@ int kernelFork(void) {
 	// copy the parent process into a new child process, changing the pid
 	// put the child process in the gReadyToRun list
     // ??? something about page tables ???
+    TracePrintf(2, "Someone called kernelFork\n");
     return -1;
 }
 
@@ -38,7 +39,7 @@ int kernelWait(int *status_ptr) {
 
 int kernelGetPid(void) {
 	// Find the pid of the calling process and return it
-	PCB* currPCB = gRunningProcessQ.m_next;
+	PCB* currPCB = getHeadProcess(gRunningProcessQ);
 	return currPCB->m_pid;
 }
 
@@ -50,7 +51,7 @@ int kernelBrk(void *addr) {
   if(newAddr < VMEM_1_BASE)
     return ERROR;
 
-  PCB* currPCB = gRunningProcessQ.m_next;
+  PCB* currPCB = getHeadProcess(gRunningProcessQ);
   PageTable* currPt = currPCB->m_pt;
   unsigned int currBrk = currPCB->m_brk;
   unsigned int brkPgNum = currBrk/PAGESIZE;
@@ -104,10 +105,10 @@ int kernelDelay(int clock_ticks) {
       return SUCCESS;
     else {
       // Move the running process to the sleep queue
-      PCB* currPCB = gRunningProcessQ.m_next;
+      PCB* currPCB = getHeadProcess(gRunningProcessQ);
       currPCB->m_timeToSleep = clock_ticks;
-      gSleepBlockedQ.m_next = currPCB;
-      gRunningProcessQ.m_next = NULL;
+      processEnqueue(gSleepBlockedQ, currPCB);
+      processDequeue(gRunningProcessQ);
       TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
 
       return SUCCESS;

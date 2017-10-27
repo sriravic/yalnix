@@ -1,6 +1,6 @@
 #
 #	Sample Makefile for Yalnix kernel and user programs.
-#	
+#
 #	Prepared by Sean Smith and Adam Salem and various Yalnix developers
 #	of years past...
 #
@@ -21,12 +21,12 @@
 ALL = $(KERNEL_ALL) $(USER_APPS)
 KERNEL_ALL = yalnix
 
-#List all kernel source files here.  
-KERNEL_SRCS = kernel.c interrupt_handler.c syscalls.c loadprogram.c yalnixutils.c
+#List all kernel source files here.
+KERNEL_SRCS = kernel.c interrupt_handler.c syscalls.c loadprogram.c yalnixutils.c process.c
 #List the objects to be formed form the kernel source files here.  Should be the same as the prvious list, replacing ".c" with ".o"
-KERNEL_OBJS = kernel.o interrupt_handler.o syscalls.o loadprogram.o yalnixutils.o
+KERNEL_OBJS = kernel.o interrupt_handler.o syscalls.o loadprogram.o yalnixutils.o process.o
 #List all of the header files necessary for your kernel
-KERNEL_INCS = 
+KERNEL_INCS =
 
 
 #List all user programs here.
@@ -36,14 +36,14 @@ USER_SRCS = idle.c init.c
 #List the objects to be formed form the user  source files here.  Should be the same as the prvious list, replacing ".c" with ".o"
 USER_OBJS = idle.o init.o
 #List all of the header files necessary for your user programs
-USER_INCS = 
+USER_INCS =
 
 #write to output program yalnix
 YALNIX_OUTPUT = yalnix
 
 #
 #	These definitions affect how your kernel is compiled and linked.
-#       The kernel requires -DLINUX, to 
+#       The kernel requires -DLINUX, to
 #	to add something like -g here, that's OK.
 #
 
@@ -58,7 +58,7 @@ INCDIR = $(DDIR58)/include
 ETCDIR = $(DDIR58)/etc
 
 # any extra loading flags...
-LD_EXTRA = 
+LD_EXTRA =
 
 KERNEL_LIBS = $(LIBDIR)/libkernel.a $(LIBDIR)/libhardware.so
 
@@ -75,7 +75,7 @@ LINK_KERNEL = $(LINK.c)
 
 USER_LIBS = $(LIBDIR)/libuser.a
 ASFLAGS = -D__ASM__
-CPPFLAGS= -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX 
+CPPFLAGS= -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX
 
 
 ##########################
@@ -90,7 +90,7 @@ CPPFLAGS= -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX
 # %.o: %.c: rules for setting up dependencies.  Don't use this directly
 # %: %.o: rules for setting up dependencies.  Don't use this directly
 
-all: $(ALL)	
+all: $(ALL)
 
 clean:
 	rm -f *.o *~ TTYLOG* TRACE $(YALNIX_OUTPUT) $(USER_APPS)  core.*
@@ -112,13 +112,3 @@ $(KERNEL_ALL): $(KERNEL_OBJS) $(KERNEL_LIBS) $(KERNEL_INCS)
 
 $(USER_APPS): $(USER_OBJS) $(USER_INCS)
 	$(ETCDIR)/yuserbuild.sh $@ $(DDIR58) $@.o
-
-
-
-
-
-
-
-
-
-
