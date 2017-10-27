@@ -60,11 +60,11 @@ extern PCBQueue gTerminatedProcessQ;
 extern PCBQueue gSleepBlockedQ;
 
 // Function headers defined in process.c
-PCB* processDequeue(PCBQueue Q);
-void processEnqueue(PCBQueue Q, PCB* process);
-PCB* getHeadProcess(PCBQueue Q);
-bool isEmptyProcessQueue(PCBQueue Q);
-int getSizeProcessQueue(PCBQueue Q);
+PCB* processDequeue(PCBQueue* Q);
+void processEnqueue(PCBQueue* Q, PCB* process);
+PCB* getHeadProcess(PCBQueue* Q);
+bool isEmptyProcessQueue(PCBQueue* Q);
+int getSizeProcessQueue(PCBQueue* Q);
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode

@@ -363,7 +363,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	//       and move it to running queue. But we do this for now.
 	//gRunningProcessQ.m_prev = NULL;
 	//gRunningProcessQ.m_next = pInitPCB;
-	processEnqueue(gRunningProcessQ, pInitPCB);
+	processEnqueue(&gRunningProcessQ, pInitPCB);
 
 	// swap out the page tables
 	// We need to do this because, further virtual address references have to go to the correct frames
@@ -479,7 +479,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// add this to ready to run queue
-	processEnqueue(gReadyToRunProcessQ, pIdlePCB);
+	processEnqueue(&gReadyToRunProcessQ, pIdlePCB);
 
 	// Reset to init's page tables
 	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);

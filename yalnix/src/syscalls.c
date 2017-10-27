@@ -1,5 +1,6 @@
 #include <process.h>
 #include <yalnix.h>
+#include <yalnixutils.h>
 
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void) {
@@ -39,7 +40,7 @@ int kernelWait(int *status_ptr) {
 
 int kernelGetPid(void) {
 	// Find the pid of the calling process and return it
-	PCB* currPCB = getHeadProcess(gRunningProcessQ);
+	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 	return currPCB->m_pid;
 }
 
@@ -51,7 +52,7 @@ int kernelBrk(void *addr) {
   if(newAddr < VMEM_1_BASE)
     return ERROR;
 
-  PCB* currPCB = getHeadProcess(gRunningProcessQ);
+  PCB* currPCB = getHeadProcess(&gRunningProcessQ);
   PageTable* currPt = currPCB->m_pt;
   unsigned int currBrk = currPCB->m_brk;
   unsigned int brkPgNum = currBrk/PAGESIZE;
@@ -105,10 +106,10 @@ int kernelDelay(int clock_ticks) {
       return SUCCESS;
     else {
       // Move the running process to the sleep queue
-      PCB* currPCB = getHeadProcess(gRunningProcessQ);
+      PCB* currPCB = getHeadProcess(&gRunningProcessQ);
       currPCB->m_timeToSleep = clock_ticks;
-      processEnqueue(gSleepBlockedQ, currPCB);
-      processDequeue(gRunningProcessQ);
+      processEnqueue(&gSleepBlockedQ, currPCB);
+      processDequeue(&gRunningProcessQ);
       TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
 
       return SUCCESS;

@@ -47,11 +47,11 @@ void interruptKernel(UserContext* ctx)
 							{
 								TracePrintf(2, "Delay was successful\n");
 
-								if(getHeadProcess(gRunningProcessQ) == NULL)
+								if(getHeadProcess(&gRunningProcessQ) == NULL)
 								{
 									// delay happened, so we can context switch
-									PCB* currPCB = getHeadProcess(gSleepBlockedQ);
-									PCB* nextPCB = getHeadProcess(gReadyToRunProcessQ);
+									PCB* currPCB = getHeadProcess(&gSleepBlockedQ);
+									PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
 									memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 									int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
 									if(rc == -1)
@@ -60,8 +60,8 @@ void interruptKernel(UserContext* ctx)
 										exit(-1);
 									}
 
-									processEnqueue(gRunningProcessQ, nextPCB);
-									processDequeue(gReadyToRunProcessQ);
+									processEnqueue(&gRunningProcessQ, nextPCB);
+									processDequeue(&gReadyToRunProcessQ);
 
 									// swap out the page tables
 									WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
@@ -93,7 +93,7 @@ void interruptClock(UserContext* ctx)
 	TracePrintf(3, "TRAP_CLOCK\n");
 
 	// update the quantum of runtime for the current running process
-	PCB* currPCB = processDequeue(gRunningProcessQ);
+	PCB* currPCB = processDequeue(&gRunningProcessQ);
   if(currPCB->m_kctx == NULL)
 	{
 		// get the first kernel context
@@ -107,13 +107,13 @@ void interruptClock(UserContext* ctx)
 	currPCB->m_ticks++;
 
 	// decrement the sleep time of the gSleepBlockedQ
-	PCB* sleepingPCB = getHeadProcess(gSleepBlockedQ);
+	PCB* sleepingPCB = getHeadProcess(&gSleepBlockedQ);
 	if(sleepingPCB != NULL) {
 		sleepingPCB->m_timeToSleep--;
 		// sleeping process wakes up, move it to ready to run
 		if(sleepingPCB->m_timeToSleep == 0) {
-			processEnqueue(gReadyToRunProcessQ, sleepingPCB);
-			processDequeue(gSleepBlockedQ);
+			processEnqueue(&gReadyToRunProcessQ, sleepingPCB);
+			processDequeue(&gSleepBlockedQ);
 		}
 	}
 	// if this process has run for too long
@@ -121,7 +121,7 @@ void interruptClock(UserContext* ctx)
 	if(currPCB->m_ticks > 2)
 	{
 		// schedule logic
-		if(getHeadProcess(gReadyToRunProcessQ) != NULL)
+		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
 		{
 			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 			TracePrintf(0, "We have a process to schedule out");
@@ -129,7 +129,7 @@ void interruptClock(UserContext* ctx)
 			// update the user context
 			currPCB->m_ticks = 0;	// reset ticks
 
-			PCB* nextPCB = getHeadProcess(gReadyToRunProcessQ);
+			PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
 			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
 			if(rc == -1)
 			{
@@ -138,8 +138,8 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
-			processEnqueue(gRunningProcessQ, nextPCB);
-			processEnqueue(gReadyToRunProcessQ, currPCB);
+			processEnqueue(&gRunningProcessQ, nextPCB);
+			processEnqueue(&gReadyToRunProcessQ, currPCB);
 
 			// swap out the page tables
 			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
@@ -187,7 +187,7 @@ void interruptMemory(UserContext* ctx)
 	unsigned int pg = (loc) / PAGESIZE;
 	unsigned int nextpg = UP_TO_PAGE(loc) / PAGESIZE;
 	unsigned int lowpg = DOWN_TO_PAGE(loc) / PAGESIZE;
-	PCB* currPCB = getHeadProcess(gRunningProcessQ);
+	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 	TracePrintf(0, "Trap location : 0X%08X\n", (unsigned int)ctx->addr);
 	TracePrintf(0, "Max VM location : 0x%08X\n", VMEM_1_LIMIT);
 	TracePrintf(0, "TRAP_MEMORY.\n");
