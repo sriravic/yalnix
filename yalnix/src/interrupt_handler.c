@@ -93,7 +93,7 @@ void interruptClock(UserContext* ctx)
 	TracePrintf(3, "TRAP_CLOCK\n");
 
 	// update the quantum of runtime for the current running process
-	PCB* currPCB = processDequeue(&gRunningProcessQ);
+	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
   if(currPCB->m_kctx == NULL)
 	{
 		// get the first kernel context
@@ -138,6 +138,7 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
+			processDequeue(&gRunningProcessQ);
 			processEnqueue(&gRunningProcessQ, nextPCB);
 			processEnqueue(&gReadyToRunProcessQ, currPCB);
 
