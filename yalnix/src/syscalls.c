@@ -2,17 +2,105 @@
 #include <yalnix.h>
 #include <yalnixutils.h>
 
+// the global process id counter
+extern int gPID;
+
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
-int kernelFork(void) {
-	// copy the parent process into a new child process, changing the pid
-	// put the child process in the gReadyToRun list
-    // ??? something about page tables ???
-    TracePrintf(2, "Someone called kernelFork\n");
-    return -1;
+int kernelFork(void)
+{
+    // Get the current running process's pcb
+    PCB* currPCB = gRunningProcessQ.m_next;
+    PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
+    PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
+    PageTable* currpt = currPCB->m_pt;
+
+    if(nextpcb != NULL && nextpt != NULL)
+    {
+        // initialize this pcb
+        nextpcb->m_pid = gPID++;
+        nextpcb->m_ppid = currPCB->m_pid;
+        nextpcb->m_state = PROCESS_READY;
+        nextpcb->m_ticks = 0;
+        nextpcb->m_timeToSleep = 0;
+        nextpcb->m_pt = nextpt;
+        nextpcb->m_kctx = NULL;
+        nextpcb->m_uctx = currPCB->m_uctx;
+
+        // copy the entries of the region 0 up to kernel stack size
+        int pg;
+        for(pg = 0; pg < KERNEL_STACK_BASE; pg++)
+        {
+            // copy r0 pages if only they are valid
+            // plus they point to the same physical frames in memory
+            // we don't copy the contents into new frames since all processes
+            // share the same kernel r0 address space
+            if(currpt->m_pte[pg].valid == 1)
+            {
+                nextpt->m_pte[pg].valid = 1;
+                nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
+                nextpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
+            }
+        }
+
+        // add two pages for kernel stack since they are unique to each process.
+        for(pg = KERNEL_STACK_BASE; pg < KERNEL_STACK_LIMIT; pg++)
+        {
+            PageTableEntry* pt = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+            if(pt != NULL)
+            {
+                nextpt->m_pte[pg].valid = 1;
+                nextpt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+                nextpt->m_pte[pg].pfn = pt->m_frameNumber;
+            }
+            else
+            {
+                TracePrintf(0, "Error allocating physical frames for the region0 of forked process");
+            }
+        }
+
+        // Now process each region1 page
+        // We first allocate each page and then set the valid and prot bits correctly
+        // we then copy the contents of each parent frame into the child's frame
+        for(pg = KERNEL_STACK_LIMIT; pg < VMEM_LIMIT; pg++)
+        {
+            if(currpt->m_pte[pg].valid == 1)
+            {
+                PageTableEntry* pt = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+                if(pt != NULL)
+                {
+                    nextpt->m_pte[pg].valid = 1;
+                    nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
+                    nextpt->m_pte[pg].pfn = pt->m_frameNumber;
+                    // get the addresses
+                    unsigned int parentAddr = currpt->m_pte[pg].pfn * PAGESIZE;
+                    unsigned int childAddr = nextpt->m_pte[pg].pfn * PAGESIZE;
+                    // copy the contents from page to page, each page size
+                    memcpy((void*)childAddr, (void*)parentAddr, sizeof(PAGESIZE));
+                }
+                else
+                {
+                    TracePrintf(0, "Error allocating physical frames for the region1 of forked process");
+                }
+            }
+        }
+
+        // Add the process to the ready-to-run queue
+        processEnqueue(&gReadyToRunProcessQ, nextPCB);
+
+        // We have added the process to the ready-to-run queue
+        // We have to return correct return codes
+        return nextPCB->m_pid;
+    }
+    else
+    {
+        TracePrintf(0, "Error creating PCB/pagetable for the fork child process");
+        exit(-1);
+    }
 }
 
 // Exec replaces the currently running process with a new program
-int kernelExec(char *filename, char **argvec) {
+int kernelExec(char *filename, char **argvec)
+{
 	// replace the calling process's text by the text pointed to by filename
 	// allocate a new heap and stack
     // call the new process as main(argc, argv) where argc and argv are determined by **argvec
@@ -45,79 +133,97 @@ int kernelGetPid(void) {
 }
 
 // Brk raises or lowers the value of the process's brk to contain addr
-int kernelBrk(void *addr) {
-  unsigned int newAddr = (unsigned int)addr;
+int kernelBrk(void *addr)
+{
+    unsigned int newAddr = (unsigned int)addr;
 
-  // cannot allocate Region 0 memory
-  if(newAddr < VMEM_1_BASE)
-    return ERROR;
-
-  PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-  PageTable* currPt = currPCB->m_pt;
-  unsigned int currBrk = currPCB->m_brk;
-  unsigned int brkPgNum = currBrk/PAGESIZE;
-  TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
-
-  unsigned int delta;
-  unsigned int pgDiff;
-  int i;
-
-  if(newAddr >= currBrk)
-  {
-    // allocate memory
-    delta = (newAddr - currBrk);
-    pgDiff = delta/PAGESIZE;
-    // TODO error handling if we run out of free frames
-    for(i = 1; i <= pgDiff; i++) {
-      FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-      unsigned int pfn = frame->m_frameNumber;
-      currPt->m_pte[brkPgNum+i].valid = 1; currPt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currPt->m_pte[brkPgNum+i].pfn = pfn;
-      TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
-    }
-  } else
-  {
-    // deallocate memory
-    delta = (currBrk - newAddr);
-    pgDiff = delta/PAGESIZE;
-    for(i = 0; i < pgDiff; i++)
+    // cannot allocate Region 0 memory
+    if(newAddr < VMEM_1_BASE)
     {
-      currPt->m_pte[brkPgNum-i].valid = 0; currPt->m_pte[brkPgNum-i].prot = PROT_NONE;
-      int pfn = currPt->m_pte[brkPgNum-i].pfn;
-      freeOneFrame(&gFreeFramePool, &gUsedFramePool, pfn);
-      TracePrintf(2, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
+        return ERROR;
     }
 
+    // get the pcb of the current running process that called for this brk
+    // compute a couple of entries to make our lives easier
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    PageTable* currPt = currPCB->m_pt;
+    unsigned int currBrk = currPCB->m_brk;
+    unsigned int brkPgNum = currBrk/PAGESIZE;
+    TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
+
+    unsigned int delta;
+    unsigned int pgDiff;
+    int i;
+
+    if(newAddr >= currBrk)
+    {
+        // allocate memory
+        delta = (newAddr - currBrk);
+        pgDiff = delta/PAGESIZE;
+
+        /// TODO: error handling if we run out of free frames
+        for(i = 1; i <= pgDiff; i++)
+        {
+            FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+            unsigned int pfn = frame->m_frameNumber;
+            currPt->m_pte[brkPgNum+i].valid = 1; currPt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currPt->m_pte[brkPgNum+i].pfn = pfn;
+            TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+        }
+    }
+    else
+    {
+        // deallocate memory
+        delta = (currBrk - newAddr);
+        pgDiff = delta/PAGESIZE;
+        for(i = 0; i < pgDiff; i++)
+        {
+            currPt->m_pte[brkPgNum-i].valid = 0; currPt->m_pte[brkPgNum-i].prot = PROT_NONE;
+            int pfn = currPt->m_pte[brkPgNum-i].pfn;
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pfn);
+            TracePrintf(2, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
+        }
+
+        // SRINATH: Why are we returning a SUCCESS here instead of a global success value?
+        //          What makes this else branch special?
+        return SUCCESS;
+    }
+
+    TracePrintf(2, "The page difference is: %d\n", pgDiff);
+
+    // set the brk to be the new address
+    currPCB->m_brk = newAddr;
+
+    // SRINATH: Well we are returning a success code here also? why two separate returns?
     return SUCCESS;
-  }
-
-  TracePrintf(2, "The page difference is: %d\n", pgDiff);
-
-  // set the brk to be the new address
-  currPCB->m_brk = newAddr;
-  return SUCCESS;
 }
 
 // Delay pauses the process for a time of clock_ticks
-int kernelDelay(int clock_ticks) {
+int kernelDelay(int clock_ticks)
+{
     TracePrintf(0, "kernalDelay called\n");
     if(clock_ticks < 0)
-      return ERROR;
+    {
+        return ERROR;
+    }
     else if (clock_ticks == 0)
+    {
       return SUCCESS;
-    else {
-      // Move the running process to the sleep queue
-      PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-      currPCB->m_timeToSleep = clock_ticks;
-      processEnqueue(&gSleepBlockedQ, currPCB);
-      processDequeue(&gRunningProcessQ);
-      TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
-
-      return SUCCESS;
+    }
+    else
+    {
+        // Move the running process to the sleep queue
+        PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+        currPCB->m_timeToSleep = clock_ticks;
+        processEnqueue(&gSleepBlockedQ, currPCB);
+        processDequeue(&gRunningProcessQ);
+        TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
+        return SUCCESS;
     }
 }
 
 // TTYRead reads from the terminal tty_id
-int kernelTtyRead(int tty_id, void *buf, int len) {
+int kernelTtyRead(int tty_id, void *buf, int len)
+{
 	// Move the calling process to the gIOBlocked list
 	// Wait for an interruptTtyReceive trap
 		// When one is received, copy len bytes into buf
@@ -128,7 +234,8 @@ int kernelTtyRead(int tty_id, void *buf, int len) {
 }
 
 // TTYWrite writes to the terminal tty_id
-int kernelTtyWrite(int tty_id, void *buf, int len) {
+int kernelTtyWrite(int tty_id, void *buf, int len)
+{
 	// Move the calling process to the gIOBlocked list
 	// Check for clean data in buf
 	// If len is greater than TERMINAL_MAX_LINE
@@ -139,13 +246,15 @@ int kernelTtyWrite(int tty_id, void *buf, int len) {
     return -1;
 }
 
-int kernelPipeInit(int *pipe_idp) {
+int kernelPipeInit(int *pipe_idp)
+{
 	// Create a new pipe with a unique id, owned by the calling process
     // Save the id into pipe_idp
     return -1;
 }
 
-int kernelPipeRead(int pipe_id, void *buf, int len) {
+int kernelPipeRead(int pipe_id, void *buf, int len)
+{
 	// Add the pipe referenced by pipe_id to the gReadPipeQueue
 	// Wait for the bytes to be available at the pipe
 	// Read bytes from the pipe
@@ -153,21 +262,24 @@ int kernelPipeRead(int pipe_id, void *buf, int len) {
     return -1;
 }
 
-int kernelPipeWrite(int pipe_id, void *buf, int len) {
+int kernelPipeWrite(int pipe_id, void *buf, int len)
+{
 	// Add the pipe referenced by pipe_id to the gWritePipeQueue
 	// Write len bytes to the buffer
     // Return
     return -1;
 }
 
-int kernelLockInit(int *lock_idp) {
+int kernelLockInit(int *lock_idp)
+{
 	// Create a new lock with a unique id, owned by the calling process, and initially unlocked
 	// Add the new lock to gLockQueue
     // Save its unique id into lock_idp
     return -1;
 }
 
-int kernelAcquire(int lock_id) {
+int kernelAcquire(int lock_id)
+{
 	// if the lock is free, update the lock's holder
     // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
     return -1;

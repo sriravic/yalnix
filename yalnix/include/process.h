@@ -27,17 +27,17 @@ typedef enum ProcessState ProcessState;
 // The process control block is the central structure that allows for the kernel to manage the processes.
 struct ProcessControlBlock
 {
-    int m_pid;                  //  process id of the current running process
-    int m_ppid;                 //  process id of the parent
-    ProcessState m_state;       //  state of the process
-    UserContext* m_uctx;        //  pointer to the user context
-    KernelContext* m_kctx;      //  pointer to the kernel context;
-    PageTable* m_pt;            //  pointer to the page table for the process
-    unsigned int m_brk;         // the brk location of this process.
-    unsigned int m_ticks;       // increment the number of ticks this process has been running for
-    unsigned int m_timeToSleep; // how long we expect to sleep for
-    struct ProcessControlBlock* m_next;
-    struct ProcessControlBlock* m_prev;
+    int m_pid;                                      //  process id of the current running process
+    int m_ppid;                                     //  process id of the parent
+    ProcessState m_state;                           //  state of the process
+    UserContext* m_uctx;                            //  pointer to the user context
+    KernelContext* m_kctx;                          //  pointer to the kernel context;
+    PageTable* m_pt;                                //  pointer to the page table for the process
+    unsigned int m_brk;                             // the brk location of this process.
+    unsigned int m_ticks;                           // increment the number of ticks this process has been running for
+    unsigned int m_timeToSleep;                     // how long we expect to sleep for
+    struct ProcessControlBlock* m_next;             // doubly linked list next pointers
+    struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
 };
 
 typedef struct ProcessControlBlock PCB;
