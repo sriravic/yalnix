@@ -8,9 +8,8 @@ extern int gPID;
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
 {
-    /*
     // Get the current running process's pcb
-    PCB* currPCB = gRunningProcessQ.m_next;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
     PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
     PageTable* currpt = currPCB->m_pt;
@@ -46,12 +45,12 @@ int kernelFork(void)
         // add two pages for kernel stack since they are unique to each process.
         for(pg = KERNEL_STACK_BASE; pg < KERNEL_STACK_LIMIT; pg++)
         {
-            PageTableEntry* pt = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-            if(pt != NULL)
+            FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+            if(frame != NULL)
             {
                 nextpt->m_pte[pg].valid = 1;
                 nextpt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
-                nextpt->m_pte[pg].pfn = pt->m_frameNumber;
+                nextpt->m_pte[pg].pfn = frame->m_frameNumber;
             }
             else
             {
@@ -66,12 +65,12 @@ int kernelFork(void)
         {
             if(currpt->m_pte[pg].valid == 1)
             {
-                PageTableEntry* pt = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-                if(pt != NULL)
+                FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+                if(frame != NULL)
                 {
                     nextpt->m_pte[pg].valid = 1;
                     nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                    nextpt->m_pte[pg].pfn = pt->m_frameNumber;
+                    nextpt->m_pte[pg].pfn = frame->m_frameNumber;
                     // get the addresses
                     unsigned int parentAddr = currpt->m_pte[pg].pfn * PAGESIZE;
                     unsigned int childAddr = nextpt->m_pte[pg].pfn * PAGESIZE;
@@ -86,18 +85,17 @@ int kernelFork(void)
         }
 
         // Add the process to the ready-to-run queue
-        processEnqueue(&gReadyToRunProcessQ, nextPCB);
+        processEnqueue(&gReadyToRunProcessQ, nextpcb);
 
         // We have added the process to the ready-to-run queue
         // We have to return correct return codes
-        return nextPCB->m_pid;
+        return nextpcb->m_pid;
     }
     else
     {
         TracePrintf(0, "Error creating PCB/pagetable for the fork child process");
         exit(-1);
     }
-    */
     return -1;
 }
 
