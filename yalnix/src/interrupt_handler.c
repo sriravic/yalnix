@@ -38,7 +38,22 @@ void interruptKernel(UserContext* ctx)
 				if(getHeadProcess(&gRunningProcessQ) == NULL)
 				{
 					// waiting happened, so we context switch
-					
+					TracePrintf(2, "Process waiting for a child to exit\n");
+					// For now, just add an ed and restart init
+					ExitData* ed = (ExitData*)malloc(sizeof(ExitData));
+					if(ed == NULL)
+					{
+						TracePrintf(0, "Failed to malloc for exit data\n");
+						exit(-1);
+					}
+					ed->m_status = 6;
+					ed->m_pid = 66;
+					processEnqueue(&gRunningProcessQ, processDequeue(&gWaitProcessQ));
+					exitDataEnqueue(getHeadProcess(&gRunningProcessQ)->m_edQ, ed);
+				}
+				else
+				{
+					TracePrintf(2, "Process %d exited w/ status %d so I don't have to wait.\n", child_pid, status);
 				}
             }
         	break;

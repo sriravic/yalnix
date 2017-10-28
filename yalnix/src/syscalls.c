@@ -8,6 +8,7 @@ extern int gPID;
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
 {
+    /*
     // Get the current running process's pcb
     PCB* currPCB = gRunningProcessQ.m_next;
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
@@ -96,6 +97,8 @@ int kernelFork(void)
         TracePrintf(0, "Error creating PCB/pagetable for the fork child process");
         exit(-1);
     }
+    */
+    return -1;
 }
 
 // Exec replaces the currently running process with a new program
@@ -124,15 +127,16 @@ int kernelWait(int *status_ptr) {
 	// Move the calling process from the gSyscallBlocked list to the gReadyToRun list
     // Return the childs pid
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-    ExitData* exitData = statusDequeue(currPCB->m_edQ);
+    ExitData* exitData = exitDataDequeue(currPCB->m_edQ);
 
-    if (childProcessList.size == 0 && exitData == NULL)
-    {
-        // no running children and no exited children
-        *status_ptr = -1;
-        return ERROR;
-    }
-    else if (exitData == NULL)
+    // if (childProcessList.size == 0 && exitData == NULL)
+    // {
+    //     // no running children and no exited children
+    //     *status_ptr = -1;
+    //     return ERROR;
+    // }
+    // else if (exitData == NULL)
+    if(exitData == NULL)
     {
         // no exited children but running children, so move it to gWaitProcessQ
         processEnqueue(&gWaitProcessQ, currPCB);

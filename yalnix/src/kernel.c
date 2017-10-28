@@ -326,6 +326,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
+	// create a child exit data queue
+	EDQueue* initEDQ = (EDQueue*)malloc(sizeof(EDQueue));
+	if(initEDQ == NULL)
+	{
+		TracePrintf(0, "Unable to create exit data queue for idle process");
+		exit(-1);
+	}
+
 	// Create a user context for the init program
 	UserContext* pInitUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pInitUC == NULL)
@@ -357,6 +365,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_timeToSleep = 0;
 	pInitPCB->m_next = NULL;
 	pInitPCB->m_prev = NULL;
+	pInitPCB->m_edQ = initEDQ;
 
 	// add the pcb to running for now
 	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
@@ -426,6 +435,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		exit(-1);
 	}
 
+	// create a child exit data queue
+	EDQueue* idleEDQ = (EDQueue*)malloc(sizeof(EDQueue));
+	if(idleEDQ == NULL)
+	{
+		TracePrintf(0, "Unable to create exit data queue for idle process");
+		exit(-1);
+	}
+
 	// Create a user context for the idle program
 	UserContext* pIdleUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pIdleUC == NULL)
@@ -457,6 +474,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_timeToSleep = 0;
 	pIdlePCB->m_next = NULL;
 	pIdlePCB->m_prev = NULL;
+	pIdlePCB->m_edQ = idleEDQ;
 
 	// reset to idle's pagetables for successfulyl loading
 	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);

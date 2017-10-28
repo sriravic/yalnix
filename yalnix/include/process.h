@@ -38,7 +38,7 @@ struct ProcessControlBlock
     unsigned int m_timeToSleep;                     // how long we expect to sleep for
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
-    struct EDQueue* m_edQ;                          // singly linked list of exit data
+    struct ExitDataQueue* m_edQ;                          // singly linked list of exit data
 };
 
 typedef struct ProcessControlBlock PCB;
@@ -65,7 +65,7 @@ PCB* processDequeue(PCBQueue* Q);
 void processEnqueue(PCBQueue* Q, PCB* process);
 PCB* getHeadProcess(PCBQueue* Q);
 bool isEmptyProcessQueue(PCBQueue* Q);
-int getSizeProcessQueue(PCBQueue* Q);
+int getProcessQueueSize(PCBQueue* Q);
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode
@@ -78,19 +78,25 @@ struct ExitData
 {
     int m_pid;
     int m_status;
+    struct ExitData* m_next;
+    struct ExitData* m_prev;
 };
 
 typedef struct ExitData ExitData;
 
-struct EDQueue {
+struct ExitDataQueue {
     ExitData* m_head;
     ExitData* m_tail;
-    int size;
+    int m_size;
 };
 
-typedef struct EDQueue;
+typedef struct ExitDataQueue EDQueue;
 
 // Temporary global list of ExitData. Eventually, each process will have a list
 extern EDQueue gExitDataQ;
+
+// Function headers for the exit data queue
+ExitData* exitDataDequeue(EDQueue* Q);
+void exitDataEnqueue(EDQueue* Q, ExitData* exitData);
 
 #endif
