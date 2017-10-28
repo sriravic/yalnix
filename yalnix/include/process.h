@@ -38,6 +38,7 @@ struct ProcessControlBlock
     unsigned int m_timeToSleep;                     // how long we expect to sleep for
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
+    struct EDQueue* m_edQ;                          // singly linked list of exit data
 };
 
 typedef struct ProcessControlBlock PCB;
@@ -71,5 +72,25 @@ struct ProcessHierarchyNode
 {
 
 };
+
+// Struct for keeping track of the data of a terminated process
+struct ExitData
+{
+    int m_pid;
+    int m_status;
+};
+
+typedef struct ExitData ExitData;
+
+struct EDQueue {
+    ExitData* m_head;
+    ExitData* m_tail;
+    int size;
+};
+
+typedef struct EDQueue;
+
+// Temporary global list of ExitData. Eventually, each process will have a list
+extern EDQueue gExitDataQ;
 
 #endif

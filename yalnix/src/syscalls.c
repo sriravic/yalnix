@@ -123,7 +123,29 @@ int kernelWait(int *status_ptr) {
 	// Save the child's exit status to status_ptr
 	// Move the calling process from the gSyscallBlocked list to the gReadyToRun list
     // Return the childs pid
-    return -1;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    ExitData* exitData = statusDequeue(currPCB->m_edQ);
+
+    if (childProcessList.size == 0 && exitData == NULL)
+    {
+        // no running children and no exited children
+        *status_ptr = -1;
+        return ERROR;
+    }
+    else if (exitData == NULL)
+    {
+        // no exited children but running children, so move it to gWaitProcessQ
+        processEnqueue(&gWaitProcessQ, currPCB);
+        processDequeue(&gRunningProcessQ);
+        *status_ptr = -1;
+        return ERROR;   // not sure what to return in this case
+    }
+    else
+    {
+        // success
+        *status_ptr = exitData->m_status;
+        return exitData->m_pid;
+    }
 }
 
 int kernelGetPid(void) {

@@ -15,22 +15,38 @@ void interruptKernel(UserContext* ctx)
 	switch(code)
 	{
         // call appropriate system call with the user context structure passed
-				case YALNIX_FORK:
-						{
-							kernelFork();
-						}
-						break;
+		case YALNIX_FORK:
+			{
+				kernelFork();
+			}
+			break;
+		case YALNIX_EXEC:
+			{
+
+			}
+			break;
+		case YALNIX_EXIT:
+			{
+
+			}
+			break;
         case YALNIX_WAIT:
             {
-                // move the process to the wait queue
                 // try to find some other process to run in its place
+				int status;
+				int child_pid = kernelWait(&status);
+				if(getHeadProcess(&gRunningProcessQ) == NULL)
+				{
+					// waiting happened, so we context switch
+					
+				}
             }
         	break;
         case YALNIX_BRK:
             {
-							void* addr = (void *)ctx->regs[0];
-							TracePrintf(2, "Brk address is: %x\n", addr);
-              kernelBrk(addr);
+				void* addr = (void *)ctx->regs[0];
+				TracePrintf(2, "Brk address is: %x\n", addr);
+            	kernelBrk(addr);
             }
             break;
         case YALNIX_GETPID:
@@ -39,47 +55,47 @@ void interruptKernel(UserContext* ctx)
 				ctx->regs[0] = (u_long)pid;
             }
             break;
-				case YALNIX_DELAY:
+			case YALNIX_DELAY:
+				{
+					int clock_ticks = ctx->regs[0];
+					int rc = kernelDelay(clock_ticks);
+					if(rc == SUCCESS)
+					{
+						TracePrintf(2, "Delay was successful\n");
+
+						if(getHeadProcess(&gRunningProcessQ) == NULL)
 						{
-							int clock_ticks = ctx->regs[0];
-							int rc = kernelDelay(clock_ticks);
-							if(rc == SUCCESS)
+							// delay happened, so we can context switch
+							PCB* currPCB = getHeadProcess(&gSleepBlockedQ);
+							PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
+							memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
+							int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
+							if(rc == -1)
 							{
-								TracePrintf(2, "Delay was successful\n");
+								TracePrintf(0, "Kernel Context switch failed\n");
+								exit(-1);
+							}
 
-								if(getHeadProcess(&gRunningProcessQ) == NULL)
-								{
-									// delay happened, so we can context switch
-									PCB* currPCB = getHeadProcess(&gSleepBlockedQ);
-									PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
-									memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
-									int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
-									if(rc == -1)
-									{
-										TracePrintf(0, "Kernel Context switch failed\n");
-										exit(-1);
-									}
+							processEnqueue(&gRunningProcessQ, nextPCB);
+							processDequeue(&gReadyToRunProcessQ);
 
-									processEnqueue(&gRunningProcessQ, nextPCB);
-									processDequeue(&gReadyToRunProcessQ);
+							// swap out the page tables
+							WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
+							WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
+							WriteRegister(REG_PTBR1, (unsigned int)(nextPCB->m_pt->m_pte + (NUM_VPN >> 1)));
+							WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
+							WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+							WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
-									// swap out the page tables
-									WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
-									WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-									WriteRegister(REG_PTBR1, (unsigned int)(nextPCB->m_pt->m_pte + (NUM_VPN >> 1)));
-									WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
-									WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-									WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
-
-									memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-									return;
-								}
+							memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+							return;
 							}
 						}
-						break;
-        default:
+					}
+				break;
+        	default:
             // all others are not implemented syscalls are not implemented.
-            break;
+            	break;
 	}
 }
 
@@ -94,7 +110,7 @@ void interruptClock(UserContext* ctx)
 
 	// update the quantum of runtime for the current running process
 	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-  if(currPCB->m_kctx == NULL)
+  	if(currPCB->m_kctx == NULL)
 	{
 		// get the first kernel context
 		int rc = KernelContextSwitch(MyKCS, currPCB, NULL);
