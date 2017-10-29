@@ -17,7 +17,12 @@ void interruptKernel(UserContext* ctx)
         // call appropriate system call with the user context structure passed
 		case YALNIX_FORK:
 			{
-				kernelFork();
+				// the return codes are stored in the pcb's user context
+				int rc = kernelFork();
+				if(rc != SUCCESS)
+				{
+					TracePrintf(0, "Fork() failed\n");
+				}
 			}
 			break;
 		case YALNIX_EXEC:

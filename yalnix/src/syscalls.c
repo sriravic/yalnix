@@ -9,26 +9,31 @@ extern int gPID;
 int kernelFork(void)
 {
     // Get the current running process's pcb
-    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
     PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
-    PageTable* currpt = currPCB->m_pt;
+    PageTable* currpt = currpcb->m_pt;
+    UserContext* nextctx = (UserContext*)malloc(sizeof(UserContext));
 
-    if(nextpcb != NULL && nextpt != NULL)
+    if(nextpcb != NULL && nextpt != NULL && nextctx != NULL)
     {
         // initialize this pcb
         nextpcb->m_pid = gPID++;
-        nextpcb->m_ppid = currPCB->m_pid;
+        nextpcb->m_ppid = currpcb->m_pid;
         nextpcb->m_state = PROCESS_READY;
         nextpcb->m_ticks = 0;
         nextpcb->m_timeToSleep = 0;
         nextpcb->m_pt = nextpt;
         nextpcb->m_kctx = NULL;
-        nextpcb->m_uctx = currPCB->m_uctx;
+        memcpy(nextctx, currpcb->m_uctx, sizeof(UserContext));
+        nextpcb->m_uctx = nextctx;
 
         // copy the entries of the region 0 up to kernel stack size
         int pg;
-        for(pg = 0; pg < KERNEL_STACK_BASE; pg++)
+        int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
+        int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
+        int r1Pages = DOWN_TO_PAGE(VMEM_LIMIT) / PAGESIZE;
+        for(pg = 0; pg < r0kernelPages; pg++)
         {
             // copy r0 pages if only they are valid
             // plus they point to the same physical frames in memory
@@ -43,7 +48,7 @@ int kernelFork(void)
         }
 
         // add two pages for kernel stack since they are unique to each process.
-        for(pg = KERNEL_STACK_BASE; pg < KERNEL_STACK_LIMIT; pg++)
+        for(pg = r0kernelPages; pg < r0StackPages; pg++)
         {
             FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
             if(frame != NULL)
@@ -59,28 +64,35 @@ int kernelFork(void)
         }
 
         // Now process each region1 page
-        // We first allocate each page and then set the valid and prot bits correctly
-        // we then copy the contents of each parent frame into the child's frame
-        for(pg = KERNEL_STACK_LIMIT; pg < VMEM_LIMIT; pg++)
+        // We first allocate so many valid frames in r0 region in kernel memory
+        // we move the contents from the R1 -> R0
+        // we then update the current page tables for the next process
+        // allocate frames for R1 pages for child process
+        // copy them and then reset the page tables
+        for(pg = r0StackPages; pg < r1Pages; pg++)
         {
             if(currpt->m_pte[pg].valid == 1)
             {
-                FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-                if(frame != NULL)
+                // Current logic: both processes share the same address space
+                // and the same frames.
+
+                //FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+                //if(frame != NULL)
                 {
                     nextpt->m_pte[pg].valid = 1;
                     nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                    nextpt->m_pte[pg].pfn = frame->m_frameNumber;
+                    nextpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
                     // get the addresses
-                    unsigned int parentAddr = currpt->m_pte[pg].pfn * PAGESIZE;
-                    unsigned int childAddr = nextpt->m_pte[pg].pfn * PAGESIZE;
+                    //unsigned int parentAddr = currpt->m_pte[pg].pfn * PAGESIZE;
+                    //unsigned int childAddr = nextpt->m_pte[pg].pfn * PAGESIZE;
+                    //TracePrintf(0, "Copying To :0X%08X ; From : 0X%08X\n", parentAddr, childAddr);
                     // copy the contents from page to page, each page size
-                    memcpy((void*)childAddr, (void*)parentAddr, sizeof(PAGESIZE));
+                    //memcpy((void*)childAddr, (void*)parentAddr, PAGESIZE);
                 }
-                else
-                {
-                    TracePrintf(0, "Error allocating physical frames for the region1 of forked process");
-                }
+                //else
+                //{
+                //    TracePrintf(0, "Error allocating physical frames for the region1 of forked process");
+                //}
             }
         }
 
@@ -89,14 +101,16 @@ int kernelFork(void)
 
         // We have added the process to the ready-to-run queue
         // We have to return correct return codes
-        return nextpcb->m_pid;
+        currpcb->m_uctx->regs[0] = nextpcb->m_pid;
+        nextpcb->m_uctx->regs[1] = 0;
+        return SUCCESS;
     }
     else
     {
         TracePrintf(0, "Error creating PCB/pagetable for the fork child process");
-        exit(-1);
+        return ERROR;
     }
-    return -1;
+    return ERROR;
 }
 
 // Exec replaces the currently running process with a new program

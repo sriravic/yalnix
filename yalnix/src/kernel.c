@@ -482,7 +482,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
-	char idleprog[] = "idle";
+	char idleprog[] = "testfork";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 
