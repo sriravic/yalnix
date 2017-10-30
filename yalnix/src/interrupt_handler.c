@@ -60,7 +60,17 @@ void interruptKernel(UserContext* ctx)
 				// update the child's kernel context
 				PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
 				memcpy(parentpcb->m_uctx, ctx, sizeof(UserContext));
-
+				int rc = SUCCESS;
+				//int rc = kernelExec();
+				if(rc != SUCCESS)
+				{
+					TracePrintf(0, "Exec failed\n");
+				}
+				else
+				{
+					// Do nothing. we have scheduled the process to run
+					// we are good to go
+				}
 			}
 			break;
 		case YALNIX_EXIT:
