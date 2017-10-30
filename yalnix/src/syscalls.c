@@ -14,8 +14,9 @@ int kernelFork(void)
     PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
     PageTable* currpt = currpcb->m_pt;
     UserContext* nextctx = (UserContext*)malloc(sizeof(UserContext));
+    KernelContext* nextkctx = (KernelContext*)malloc(sizeof(KernelContext));
 
-    if(nextpcb != NULL && nextpt != NULL && nextctx != NULL)
+    if(nextpcb != NULL && nextpt != NULL && nextctx != NULL && nextkctx != NULL)
     {
         // initialize this pcb
         nextpcb->m_pid = gPID++;
@@ -26,7 +27,9 @@ int kernelFork(void)
         nextpcb->m_pt = nextpt;
         nextpcb->m_kctx = NULL;
         memcpy(nextctx, currpcb->m_uctx, sizeof(UserContext));
+        memcpy(nextkctx, currpcb->m_kctx, sizeof(KernelContext));
         nextpcb->m_uctx = nextctx;
+        nextpcb->m_kctx = nextkctx;
 
         // copy the entries of the region 0 up to kernel stack size
         int pg;

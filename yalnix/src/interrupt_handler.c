@@ -18,6 +18,17 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_FORK:
 			{
 				// the return codes are stored in the pcb's user context
+				PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+				if(currPCB->m_kctx == NULL)
+			  	{
+					  // get the first kernel context
+					int rc = KernelContextSwitch(MyKCS, currPCB, NULL);
+					if(rc == -1)
+					{
+						TracePrintf(0, "Getting first context failed");
+						exit(-1);
+					}
+			  	}
 				int rc = kernelFork();
 				if(rc != SUCCESS)
 				{
