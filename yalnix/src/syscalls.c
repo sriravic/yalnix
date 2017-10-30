@@ -80,8 +80,7 @@ int kernelFork(void)
         currpt->m_pte[kernelBrkPage].valid = 1;
         currpt->m_pte[kernelBrkPage].prot = PROT_READ|PROT_WRITE;
         currpt->m_pte[kernelBrkPage].pfn = temporary->m_frameNumber;
-        unsigned int r1offset = NUM_VPN >>
-
+        unsigned int r1offset = NUM_VPN >> 1;
         for(pg = r0StackPages; pg < r1Pages; pg++)
         {
             if(currpt->m_pte[pg].valid == 1)
