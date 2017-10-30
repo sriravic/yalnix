@@ -2,6 +2,7 @@
 #define __YALNIX_UTILS_H__
 
 #include <pagetable.h>
+#include "process.h"
 
 // utility functions that we add to make our life easier within the yalnix environemtn
 static inline unsigned int getKB(unsigned int size) { return size >> 10; }
@@ -15,5 +16,8 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
 
 // finds the node for framenum and removes it from the used pool and moves it to the free frames
 void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigned int frameNum);
+
+// swaps the page table to the PCB passed in
+void swapPageTable(PCB* process);
 
 #endif

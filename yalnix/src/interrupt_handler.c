@@ -100,12 +100,7 @@ void interruptKernel(UserContext* ctx)
 							processDequeue(&gReadyToRunProcessQ);
 
 							// swap out the page tables
-							WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
-							WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-							WriteRegister(REG_PTBR1, (unsigned int)(nextPCB->m_pt->m_pte + (NUM_VPN >> 1)));
-							WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
-							WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-							WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+							swapPageTable(nextPCB);
 
 							memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
 							return;
@@ -179,12 +174,7 @@ void interruptClock(UserContext* ctx)
 			processEnqueue(&gReadyToRunProcessQ, currPCB);
 
 			// swap out the page tables
-			WriteRegister(REG_PTBR0, (unsigned int)nextPCB->m_pt->m_pte);
-			WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-			WriteRegister(REG_PTBR1, (unsigned int)(nextPCB->m_pt->m_pte + (NUM_VPN >> 1)));
-			WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
-			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+			swapPageTable(nextPCB);
 
 			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
 			return;

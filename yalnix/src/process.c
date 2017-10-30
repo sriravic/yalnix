@@ -46,6 +46,34 @@ void processEnqueue(PCBQueue* Q, PCB* process)
     Q->m_size++;
 }
 
+// return the PCB with pid in the given queue, or NULL if there is not one
+PCB* getPcbByPid(PCBQueue* Q, unsigned int pid)
+{
+    PCB* curr = Q->m_head;
+    while(curr != NULL)
+    {
+        if(curr->m_pid == pid)
+        {
+            return curr;
+        }
+    }
+    return NULL;
+}
+
+// return the first PCB that is a child of the given pid, or NULL if there is not one
+PCB* getChildOfPid(PCBQueue* Q, unsigned int pid)
+{
+    PCB* curr = Q->m_head;
+    while(curr != NULL)
+    {
+        if(curr->m_ppid == pid)
+        {
+            return curr;
+        }
+    }
+    return NULL;
+}
+
 PCB* getHeadProcess(PCBQueue* Q)
 {
     return Q->m_head;
