@@ -160,7 +160,7 @@ void interruptClock(UserContext* ctx)
 		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
 		{
 			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
-			TracePrintf(0, "We have a process to schedule out");
+			TracePrintf(0, "We have a process to schedule out\n");
 
 			// update the user context
 			currPCB->m_ticks = 0;	// reset ticks
@@ -176,6 +176,7 @@ void interruptClock(UserContext* ctx)
 			// swap the two pcbs
 			processDequeue(&gRunningProcessQ);
 			processEnqueue(&gRunningProcessQ, nextPCB);
+			processDequeue(&gReadyToRunProcessQ);					// remove the process that was picked to run
 			processEnqueue(&gReadyToRunProcessQ, currPCB);
 
 			// swap out the page tables

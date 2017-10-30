@@ -38,7 +38,7 @@ struct ProcessControlBlock
     unsigned int m_timeToSleep;                     // how long we expect to sleep for
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
-    struct ExitDataQueue* m_edQ;                          // singly linked list of exit data
+    struct ExitDataQueue* m_edQ;                    // singly linked list of exit data
 };
 
 typedef struct ProcessControlBlock PCB;
@@ -66,6 +66,7 @@ void processEnqueue(PCBQueue* Q, PCB* process);
 PCB* getHeadProcess(PCBQueue* Q);
 bool isEmptyProcessQueue(PCBQueue* Q);
 int getProcessQueueSize(PCBQueue* Q);
+void removeFromQueue(PCBQueue* Q, PCB* process);
 
 // hierarchical representation of process formation in the system
 struct ProcessHierarchyNode
