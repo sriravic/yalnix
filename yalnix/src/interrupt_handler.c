@@ -166,6 +166,7 @@ void interruptClock(UserContext* ctx)
 			currPCB->m_ticks = 0;	// reset ticks
 
 			PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
+
 			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
 			if(rc == -1)
 			{
