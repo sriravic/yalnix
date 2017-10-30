@@ -88,7 +88,6 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 	}
 	else if(currPCB != NULL && nextPCB != NULL)
 	{
-
 		// We store the current state in teh current process
 		memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
 

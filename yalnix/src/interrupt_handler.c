@@ -18,38 +18,39 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_FORK:
 			{
 				// the return codes are stored in the pcb's user context
+				// update the child's kernel context
+				PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
 				int rc = kernelFork();
 				if(rc != SUCCESS)
 				{
 					TracePrintf(0, "Fork() failed\n");
 				}
-
-				// update the child's kernel context
-				PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
-				if(parentpcb->m_kctx == NULL)
-			  	{
-					  // get the first kernel context
-					int rc = KernelContextSwitch(MyKCS, parentpcb, NULL);
-					if(rc == -1)
-					{
-						TracePrintf(0, "Getting first context failed");
-						exit(-1);
-					}
-			  	}
-
-				if(parentpcb->m_kctx != NULL)
+				else
 				{
-					PCB* childpcb = getPcbByPid(&gReadyToRunProcessQ, parentpcb->m_uctx->regs[0]);
-					if(childpcb != NULL)
+					TracePrintf(0, "Fork() success\n");
+					if(parentpcb->m_kctx == NULL)
 					{
-						memcpy(childpcb->m_kctx, parentpcb->m_kctx, sizeof(KernelContext));
-					}
-					else
-					{
-						TracePrintf(0, "Did not find child process\n");
+						// perform a dummy context switch here to give the child
+						// the starting location to run from
+						rc = KernelContextSwitch(MyKCS, parentpcb, NULL);
+						if(rc == -1)
+						{
+							TracePrintf(0, "Error obtaining kernel context during the fork\n");
+						}
+						else
+						{
+							PCB* childpcb = getPcbByPid(&gReadyToRunProcessQ, parentpcb->m_uctx->regs[0]);
+							if(childpcb != NULL && childpcb->m_kctx != NULL)
+							{
+								memcpy(childpcb->m_kctx, parentpcb->m_kctx, sizeof(KernelContext));
+							}
+							else
+							{
+								TracePrintf(0, "Did not find child process\n");
+							}
+						}
 					}
 				}
-
 			}
 			break;
 		case YALNIX_EXEC:

@@ -127,6 +127,8 @@ int kernelFork(void)
         // We have to return correct return codes
         currpcb->m_uctx->regs[0] = nextpcb->m_pid;
         nextpcb->m_uctx->regs[1] = 0;
+        nextpcb->m_uctx->sp = currpcb->m_uctx->sp;
+        nextpcb->m_uctx->pc = currpcb->m_uctx->pc;
         return SUCCESS;
     }
     else
