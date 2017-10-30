@@ -11,7 +11,8 @@
 #include <pagetable.h>
 #include <stdbool.h>
 
-extern int gPID;       // the global pid counter that can be given to executing processes
+extern int gPID;            // the global pid counter that can be given to executing processes
+extern void* gKernelBrk;    // the global kernel brk
 
 enum ProcessState
 {

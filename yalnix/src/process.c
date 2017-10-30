@@ -56,6 +56,10 @@ PCB* getPcbByPid(PCBQueue* Q, unsigned int pid)
         {
             return curr;
         }
+        else
+        {
+            curr = curr->m_next;
+        }
     }
     return NULL;
 }
@@ -69,6 +73,10 @@ PCB* getChildOfPid(PCBQueue* Q, unsigned int pid)
         if(curr->m_ppid == pid)
         {
             return curr;
+        }
+        else
+        {
+            curr = curr->m_next;
         }
     }
     return NULL;

@@ -16,8 +16,8 @@ int kernelFork(void)
     PageTable* currpt = currpcb->m_pt;
     UserContext* nextuctx = (UserContext*)malloc(sizeof(UserContext));
     KernelContext* nextkctx = (KernelContext*)malloc(sizeof(KernelContext));
-    
-    if(nextpcb != NULL && nextpt != NULL && nextuctx != NULL && nextkctx != NULL)
+
+    if(nextpcb != NULL && nextpt != NULL && nextuctx != NULL /*&& nextkctx != NULL*/)
     {
         // initialize this pcb
         nextpcb->m_pid = gPID++;
@@ -26,9 +26,9 @@ int kernelFork(void)
         nextpcb->m_ticks = 0;
         nextpcb->m_timeToSleep = 0;
         nextpcb->m_pt = nextpt;
-        nextpcb->m_kctx = NULL;
+        nextpcb->m_brk = currpcb->m_brk;
         memcpy(nextuctx, currpcb->m_uctx, sizeof(UserContext));
-        memcpy(nextkctx, currpcb->m_kctx, sizeof(KernelContext));
+        //memcpy(nextkctx, currpcb->m_kctx, sizeof(KernelContext));
         nextpcb->m_uctx = nextuctx;
         nextpcb->m_kctx = nextkctx;
 
@@ -58,7 +58,7 @@ int kernelFork(void)
             if(frame != NULL)
             {
                 nextpt->m_pte[pg].valid = 1;
-                nextpt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+                nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
                 nextpt->m_pte[pg].pfn = frame->m_frameNumber;
             }
             else
@@ -68,37 +68,52 @@ int kernelFork(void)
         }
 
         // Now process each region1 page
-        // We first allocate so many valid frames in r0 region in kernel memory
-        // we move the contents from the R1 -> R0
-        // we then update the current page tables for the next process
-        // allocate frames for R1 pages for child process
-        // copy them and then reset the page tables
+        // We first allocate one temporary page in R0
+        // we then copy the contents of the R1(parent)  -> R0 page
+        // we swap out the address space of the page tables of R1
+        // we then copy from R0 page -> R1(child)
+        // we repeat this process till we have copied all the pages appropriately
+        unsigned int kernelBrk = (unsigned int)gKernelBrk;
+        unsigned int kernelBrkPage = kernelBrk / PAGESIZE;
+
+        FrameTableEntry* temporary = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        currpt->m_pte[kernelBrkPage].valid = 1;
+        currpt->m_pte[kernelBrkPage].prot = PROT_READ|PROT_WRITE;
+        currpt->m_pte[kernelBrkPage].pfn = temporary->m_frameNumber;
+        unsigned int r1offset = NUM_VPN >>
+
         for(pg = r0StackPages; pg < r1Pages; pg++)
         {
             if(currpt->m_pte[pg].valid == 1)
             {
-                // Current logic: both processes share the same address space
-                // and the same frames.
-
-                //FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-                //if(frame != NULL)
+                FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+                if(frame != NULL)
                 {
                     nextpt->m_pte[pg].valid = 1;
                     nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                    nextpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
-                    // get the addresses
-                    //unsigned int parentAddr = currpt->m_pte[pg].pfn * PAGESIZE;
-                    //unsigned int childAddr = nextpt->m_pte[pg].pfn * PAGESIZE;
-                    //TracePrintf(0, "Copying To :0X%08X ; From : 0X%08X\n", parentAddr, childAddr);
-                    // copy the contents from page to page, each page size
-                    //memcpy((void*)childAddr, (void*)parentAddr, PAGESIZE);
+                    nextpt->m_pte[pg].pfn = frame->m_frameNumber;
+
+                    // copy from R1(pg) -> R0(kernelbrkpage)
+                    memcpy((void*)(kernelBrkPage * PAGESIZE), (void*)(pg * PAGESIZE), PAGESIZE);
+
+                    // swap out parent's R1 address space
+                    WriteRegister(REG_PTBR1, (unsigned int)(nextpt->m_pte + r1offset));
+                    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+                    // perform the copy from R1 -> R0(child) address space
+                    memcpy((void*)(pg * PAGESIZE), (void*)(kernelBrkPage * PAGESIZE), PAGESIZE);
+
+                    // swap back in the parent's R1 address space
+                    WriteRegister(REG_PTBR1, (unsigned int)(currpt->m_pte + r1offset));
+                    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
                 }
-                //else
-                //{
-                //    TracePrintf(0, "Error allocating physical frames for the region1 of forked process");
-                //}
             }
         }
+
+        // remove the temporary used frame
+        freeOneFrame(&gFreeFramePool, &gUsedFramePool, temporary->m_frameNumber);
+        currpt->m_pte[kernelBrkPage].valid = 0;
+        free(temporary);
 
         // Add the process to the ready-to-run queue
         processEnqueue(&gReadyToRunProcessQ, nextpcb);
