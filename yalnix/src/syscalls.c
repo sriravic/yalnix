@@ -13,6 +13,7 @@ int kernelFork(void)
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
     PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
+    memset(nextpt, 0, sizeof(PageTable));
     PageTable* currpt = currpcb->m_pt;
     UserContext* nextuctx = (UserContext*)malloc(sizeof(UserContext));
     KernelContext* nextkctx = (KernelContext*)malloc(sizeof(KernelContext));
@@ -89,18 +90,23 @@ int kernelFork(void)
                 if(frame != NULL)
                 {
                     nextpt->m_pte[pg].valid = 1;
-                    nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
+                    nextpt->m_pte[pg].prot = PROT_READ|PROT_WRITE;
                     nextpt->m_pte[pg].pfn = frame->m_frameNumber;
+                    unsigned int src = pg * PAGESIZE;
+                    unsigned int dest = kernelBrkPage * PAGESIZE;
 
                     // copy from R1(pg) -> R0(kernelbrkpage)
-                    memcpy((void*)(kernelBrkPage * PAGESIZE), (void*)(pg * PAGESIZE), PAGESIZE);
+                    memcpy(dest, src, PAGESIZE);
 
                     // swap out parent's R1 address space
                     WriteRegister(REG_PTBR1, (unsigned int)(nextpt->m_pte + r1offset));
                     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
                     // perform the copy from R1 -> R0(child) address space
-                    memcpy((void*)(pg * PAGESIZE), (void*)(kernelBrkPage * PAGESIZE), PAGESIZE);
+                    memcpy(src, dest, PAGESIZE);
+
+                    // give the correct permissions for this frame
+                    nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
 
                     // swap back in the parent's R1 address space
                     WriteRegister(REG_PTBR1, (unsigned int)(currpt->m_pte + r1offset));
