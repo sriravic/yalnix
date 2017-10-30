@@ -56,6 +56,10 @@ void interruptKernel(UserContext* ctx)
 			break;
 		case YALNIX_EXEC:
 			{
+				// the return codes are stored in the pcb's user context
+				// update the child's kernel context
+				PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(parentpcb->m_uctx, ctx, sizeof(UserContext));
 
 			}
 			break;

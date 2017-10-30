@@ -1,7 +1,14 @@
+#include <fcntl.h>
+#include <hardware.h>
+#include <load_info.h>
+#include <process.h>
+#include <pagetable.h>
+#include <unistd.h>
+#include <yalnix.h>
+#include <yalnixutils.h>
 #include <process.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
-#include <stdbool.h>
 
 // the global process id counter
 extern int gPID;
@@ -140,12 +147,368 @@ int kernelFork(void)
 }
 
 // Exec replaces the currently running process with a new program
-int kernelExec(char *filename, char **argvec)
+int kernelExec(char *name, char **args)
 {
-	// replace the calling process's text by the text pointed to by filename
-	// allocate a new heap and stack
-    // call the new process as main(argc, argv) where argc and argv are determined by **argvec
-    return -1;
+    // Get the pcb of the calling process
+    PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
+    PageTable* currpt = parentpcb->m_pt;
+
+    // Create a pcb and page table entries
+    PCB* childpcb = (PCB*)malloc(sizeof(PCB));
+    PageTable* childpt = (PageTable*)malloc(sizeof(PageTable));
+    memset(childpt, 0, sizeof(PageTable));
+    UserContext* chilductx = (UserContext*)malloc(sizeof(UserContext));
+
+    if(parentpcb != NULL && childpcb != NULL && childpt != NULL && chilductx != NULL)
+    {
+        // setup the child pcb
+        childpcb->m_pid = gPID++;
+        childpcb->m_ppid = parentpcb->m_pid;
+        childpcb->m_state = PROCESS_READY;
+        childpcb->m_ticks = 0;
+        childpcb->m_timeToSleep = 0;
+        childpcb->m_pt = childpt;
+        childpcb->m_brk = 0;                // this is setup by the loader code
+        childpcb->m_uctx = chilductx;       // we will update this structure with the loading code
+        childpcb->m_kctx = NULL;            // will get initialized during the kernel switch
+
+        // R0 region setup code
+        // copy the entries of the region 0 up to kernel stack size
+        int pg;
+        int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
+        int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
+        int r1Pages = DOWN_TO_PAGE(VMEM_LIMIT) / PAGESIZE;
+        for(pg = 0; pg < r0kernelPages; pg++)
+        {
+            // copy r0 pages if only they are valid
+            // plus they point to the same physical frames in memory
+            // we don't copy the contents into new frames since all processes
+            // share the same kernel r0 address space
+            if(currpt->m_pte[pg].valid == 1)
+            {
+                childpt->m_pte[pg].valid = 1;
+                childpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
+                childpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
+            }
+        }
+
+        // add two pages for kernel stack since they are unique to each process.
+        for(pg = r0kernelPages; pg < r0StackPages; pg++)
+        {
+            FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+            if(frame != NULL)
+            {
+                childpt->m_pte[pg].valid = 1;
+                childpt->m_pte[pg].prot = PROT_READ|PROT_WRITE;
+                childpt->m_pte[pg].pfn = frame->m_frameNumber;
+            }
+            else
+            {
+                TracePrintf(0, "Error allocating physical frames for the kernel region0 of forked process");
+            }
+        }
+
+        // R1 region setup code
+        int fd;
+        int (*entry)();
+        struct load_info li;
+        int i;
+        char *cp;
+        char **cpp;
+        char *cp2;
+        int argcount;
+        int size;
+        int text_pg1;
+        int data_pg1;
+        int data_npg;
+        int stack_npg;
+        long segment_size;
+        char *argbuf;
+
+        /*
+        * Open the executable file
+        */
+         if ((fd = open(name, O_RDONLY)) < 0) {
+             TracePrintf(0, "LoadProgram: can't open file '%s'\n", name);
+             return ERROR;
+         }
+
+         if (LoadInfo(fd, &li) != LI_NO_ERROR) {
+             TracePrintf(0, "LoadProgram: '%s' not in Yalnix format\n", name);
+             close(fd);
+             return (-1);
+         }
+
+         if (li.entry < VMEM_1_BASE) {
+             TracePrintf(0, "LoadProgram: '%s' not linked for Yalnix\n", name);
+             close(fd);
+             return ERROR;
+         }
+
+         /*
+         * Figure out in what region 1 page the different program sections
+         * start and end
+         */
+         text_pg1 = (li.t_vaddr - VMEM_1_BASE) >> PAGESHIFT;
+         data_pg1 = (li.id_vaddr - VMEM_1_BASE) >> PAGESHIFT;
+         data_npg = li.id_npg + li.ud_npg;
+         /*
+         *  Figure out how many bytes are needed to hold the arguments on
+         *  the new stack that we are building.  Also count the number of
+         *  arguments, to become the argc that the new "main" gets called with.
+         */
+         size = 0;
+         for (i = 0; args[i] != NULL; i++) {
+             TracePrintf(3, "counting arg %d = '%s'\n", i, args[i]);
+             size += strlen(args[i]) + 1;
+         }
+         argcount = i;
+
+         TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
+
+         /*
+         *  The arguments will get copied starting at "cp", and the argv
+         *  pointers to the arguments (and the argc value) will get built
+         *  starting at "cpp".  The value for "cpp" is computed by subtracting
+         *  off space for the number of arguments (plus 3, for the argc value,
+         *  a NULL pointer terminating the argv pointers, and a NULL pointer
+         *  terminating the envp pointers) times the size of each,
+         *  and then rounding the value *down* to a double-word boundary.
+         */
+         cp = ((char *)VMEM_1_LIMIT) - size;
+
+         cpp = (char **)
+             (((int)cp -
+             ((argcount + 3 + POST_ARGV_NULL_SPACE) *sizeof (void *)))
+             & ~7);
+
+         /*
+         * Compute the new stack pointer, leaving INITIAL_STACK_FRAME_SIZE bytes
+         * reserved above the stack pointer, before the arguments.
+         */
+         cp2 = (caddr_t)cpp - INITIAL_STACK_FRAME_SIZE;
+
+         TracePrintf(1, "prog_size %d, text %d data %d bss %d pages\n",
+         li.t_npg + data_npg, li.t_npg, li.id_npg, li.ud_npg);
+
+         /*
+         * Compute how many pages we need for the stack */
+         stack_npg = (VMEM_1_LIMIT - DOWN_TO_PAGE(cp2)) >> PAGESHIFT;
+
+         TracePrintf(1, "LoadProgram: heap_size %d, stack_size %d\n",
+             li.t_npg + data_npg, stack_npg);
+
+
+         /* leave at least one page between heap and stack */
+         if (stack_npg + data_pg1 + data_npg >= MAX_PT_LEN)
+         {
+             close(fd);
+             return ERROR;
+         }
+
+         /*
+         * This completes all the checks before we proceed to actually load
+         * the new program.  From this point on, we are committed to either
+         * loading succesfully or killing the process.
+         */
+
+         /*
+         * Set the new stack pointer value in the process's exception frame.
+         */
+         childpcb->m_uctx->sp = cp2;
+
+         /*
+         * Now save the arguments in a separate buffer in region 0, since
+         * we are about to blow away all of region 1.
+         */
+         cp2 = argbuf = (char *)malloc(size);
+         if(cp2 != NULL)
+         {
+             for (i = 0; args[i] != NULL; i++)
+             {
+             TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
+             strcpy(cp2, args[i]);
+             cp2 += strlen(cp2) + 1;
+             }
+         }
+         else
+         {
+             TracePrintf(0, "Unable to allocate space for new program for arguments\n");
+             return ERROR;
+         }
+
+         /*
+         * Set up the page tables for the process so that we can read the
+         * program into memory.  Get the right number of physical pages
+         * allocated, and set them all to writable.
+         */
+
+         // set the active pagetables to the new process
+         PageTable* pt = childpt;
+         unsigned int r0offset = NUM_VPN >> 1;
+         WriteRegister(REG_PTBR1, (unsigned int)(childpt->m_pte + r0offset));
+         WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+         // invalidate all the pages for region 1
+         // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
+         int region;
+         for(region = NUM_VPN >> 1; region < NUM_VPN; region++)
+         {
+             if(pt->m_pte[region].valid == 1)
+             {
+                 freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].pfn);
+                 pt->m_pte[region].valid = 0;
+             }
+         }
+
+         // Allocate "li.t_npg" physical pages and map them starting at
+         // the "text_pg1" page in region 1 address space.
+         // These pages should be marked valid, with a protection of
+         // (PROT_READ | PROT_WRITE).
+         int allocPages = 0;
+         unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
+         for(pg = text_pg1 + r1offset; pg < NUM_VPN && allocPages < li.t_npg; pg++)
+         {
+             pt->m_pte[pg].valid = 1;
+             pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+             FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+             pt->m_pte[pg].pfn = frame->m_frameNumber;
+             allocPages++;
+         }
+
+         // Allocate "data_npg" physical pages and map them starting at
+         // the  "data_pg1" in region 1 address space.
+         // These pages should be marked valid, with a protection of
+         // (PROT_READ | PROT_WRITE).
+         allocPages = 0;
+         for(pg = data_pg1 + r1offset; pg < NUM_VPN && allocPages < data_npg; pg++)
+         {
+             pt->m_pte[pg].valid = 1;
+             pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+             FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+             pt->m_pte[pg].pfn = frame->m_frameNumber;
+             allocPages++;
+         }
+
+         // set the brk of the heap to be the base address of the next page above datasegment
+         childpcb->m_brk = pg * PAGESIZE;
+
+         /*
+         * Allocate memory for the user stack too.
+         */
+         // Allocate "stack_npg" physical pages and map them to the top
+         // of the region 1 virtual address space.
+         // These pages should be marked valid, with a
+         // protection of (PROT_READ | PROT_WRITE).
+         allocPages = 0;
+         for(pg = NUM_VPN - 1; pg > r1offset && allocPages < stack_npg; pg--)
+         {
+             pt->m_pte[pg].valid = 1;
+             pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+             FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+             pt->m_pte[pg].pfn = frame->m_frameNumber;
+             allocPages++;
+         }
+
+         /*
+         * All pages for the new address space are now in the page table.
+         * But they are not yet in the TLB, remember!
+         */
+
+         /*
+         * Read the text from the file into memory.
+         */
+         lseek(fd, li.t_faddr, SEEK_SET);
+         segment_size = li.t_npg << PAGESHIFT;
+         if (read(fd, (void *) li.t_vaddr, segment_size) != segment_size)
+         {
+             close(fd);
+             TracePrintf(0, "Copy program text failed\n");
+             // KILL is not defined anywhere: it is an error code distinct
+             // from ERROR because it requires different action in the caller.
+             // Since this error code is internal to your kernel, you get to define it.
+             return KILL;
+         }
+
+         /*
+         * Read the data from the file into memory.
+         */
+         lseek(fd, li.id_faddr, 0);
+         segment_size = li.id_npg << PAGESHIFT;
+
+         if (read(fd, (void *) li.id_vaddr, segment_size) != segment_size)
+         {
+             close(fd);
+             TracePrintf(0, "Copy program data failed\n");
+             return KILL;
+         }
+
+         /*
+         * Now set the page table entries for the program text to be readable
+         * and executable, but not writable.
+         */
+
+         // Change the protection on the "li.t_npg" pages starting at
+         // virtual address VMEM_1_BASE + (text_pg1 << PAGESHIFT).  Note
+         // that these pages will have indices starting at text_pg1 in
+         // the page table for region 1.
+         // The new protection should be (PROT_READ | PROT_EXEC).
+         // If any of these page table entries is also in the TLB, either
+         // invalidate their entries in the TLB or write the updated entries
+         // into the TLB.  It's nice for the TLB and the page tables to remain
+         // consistent.
+         for(pg = r1offset; pg < r1offset + li.t_npg; pg++)
+         {
+             pt->m_pte[pg].prot = PROT_READ | PROT_EXEC;
+         }
+
+         // flush region1 TLB
+         WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+         close(fd);			/* we've read it all now */
+
+         /*
+         * Zero out the uninitialized data area
+         */
+         bzero(li.id_end, li.ud_end - li.id_end);
+
+         /*
+         * Set the entry point in the exception frame.
+         */
+         childpcb->m_uctx->pc = (caddr_t) li.entry;
+
+         /*
+         * Now, finally, build the argument list on the new stack.
+         */
+         #ifdef LINUX
+         memset(cpp, 0x00, VMEM_1_LIMIT - ((int) cpp));
+         #endif
+
+         *cpp++ = (char *)argcount;		/* the first value at cpp is argc */
+         cp2 = argbuf;
+         for (i = 0; i < argcount; i++)
+         {
+             /* copy each argument and set argv */
+             *cpp++ = cp;
+             strcpy(cp, cp2);
+             cp += strlen(cp) + 1;
+             cp2 += strlen(cp2) + 1;
+         }
+         free(argbuf);
+         *cpp++ = NULL;			/* the last argv is a NULL pointer */
+         *cpp++ = NULL;			/* a NULL pointer for an empty envp */
+
+
+         // We have successfully created the process
+         // add it to the ready-to-run queue
+         processEnqueue(&gReadyToRunProcessQ, childpcb);
+
+         // reset the pagetables to the calling process
+         WriteRegister(REG_PTBR1, (unsigned int)(parentpcb->m_pt->m_pte + r0offset));
+         WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
+         return SUCCESS;
+    }
 }
 
 // Exit terminates the calling process
