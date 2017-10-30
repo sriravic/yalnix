@@ -59,3 +59,12 @@ void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigne
 
     availPrev->m_next = curr;
 }
+
+void swapPageTable(PCB* process){
+    WriteRegister(REG_PTBR0, (unsigned int)process->m_pt->m_pte);
+    WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
+    WriteRegister(REG_PTBR1, (unsigned int)(process->m_pt->m_pte + (NUM_VPN >> 1)));
+    WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+}

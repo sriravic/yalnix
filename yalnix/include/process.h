@@ -63,6 +63,8 @@ extern PCBQueue gSleepBlockedQ;
 // Function headers defined in process.c
 PCB* processDequeue(PCBQueue* Q);
 void processEnqueue(PCBQueue* Q, PCB* process);
+PCB* getPcbByPid(PCBQueue* Q, unsigned int pid);
+PCB* getChildOfPid(PCBQueue* Q, unsigned int pid);
 PCB* getHeadProcess(PCBQueue* Q);
 bool isEmptyProcessQueue(PCBQueue* Q);
 int getProcessQueueSize(PCBQueue* Q);

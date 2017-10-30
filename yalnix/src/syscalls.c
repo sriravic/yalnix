@@ -1,6 +1,7 @@
 #include <process.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
+#include <stdbool.h>
 
 // the global process id counter
 extern int gPID;
@@ -135,23 +136,21 @@ void kernelExit(int status) {
 
 // Wait
 int kernelWait(int *status_ptr) {
-	// If the calling process has no children or has a child that is already dead, return ERROR
-	// Move the calling process to the gSyscallBlocked list
-	// Wait for the processes child to Exit()
-	// Save the child's exit status to status_ptr
-	// Move the calling process from the gSyscallBlocked list to the gReadyToRun list
-    // Return the childs pid
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
     ExitData* exitData = exitDataDequeue(currPCB->m_edQ);
+    // find if the running process has children by trawling the process queues
+    bool hasChildProcess =
+        getChildOfPid(&gReadyToRunProcessQ, currPCB->m_pid) != NULL ||
+        getChildOfPid(&gWaitProcessQ, currPCB->m_pid) != NULL ||
+        getChildOfPid(&gSleepBlockedQ, currPCB->m_pid) != NULL;
 
-    // if (childProcessList.size == 0 && exitData == NULL)
-    // {
-    //     // no running children and no exited children
-    //     *status_ptr = -1;
-    //     return ERROR;
-    // }
-    // else if (exitData == NULL)
-    if(exitData == NULL)
+    if (!hasChildProcess && exitData == NULL)
+    {
+        // no running children and no exited children
+        *status_ptr = -1;
+        return ERROR;
+    }
+    else if (exitData == NULL)
     {
         // no exited children but running children, so move it to gWaitProcessQ
         processEnqueue(&gWaitProcessQ, currPCB);
