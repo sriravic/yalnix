@@ -17,13 +17,16 @@ PCB* processDequeue(PCBQueue* Q)
         Q->m_head = NULL;
         Q->m_tail = NULL;
         Q->m_size--;
+        pcb->m_next = NULL;
+        pcb->m_prev = NULL;
         return pcb;
     } else {
         // remove from beginning
         PCB* pcb = Q->m_head;
         Q->m_head = pcb->m_next;
-        pcb->m_next = NULL;
         Q->m_size--;
+        pcb->m_next = NULL;
+        pcb->m_prev = NULL;
         return pcb;
     }
 }
@@ -34,16 +37,47 @@ void processEnqueue(PCBQueue* Q, PCB* process)
         // empty list
         Q->m_head = process;
         Q->m_tail = process;
-         // maybe make the processes next and prev be null?
+        process->m_next = NULL;
+        process->m_prev = NULL;
     }
     else {
         // add to end
         Q->m_tail->m_next = process;
-        process->m_prev = Q->m_tail;
         process->m_next = NULL;
+        process->m_prev = Q->m_tail;
         Q->m_tail = process;
     }
     Q->m_size++;
+}
+
+/*  Method to remove a process from the given queue in O(1) time
+    Needs the PCBQueue in case it needs to update the head or tail
+    Note- it falls to the user to ensure that the process is actually in the queue in the first place
+ */
+void processRemove(PCBQueue* Q, PCB* process)
+{
+    if(Q->m_head == process)
+    {
+        // simply dequeue (takes care of process=head=tail also)
+        processDequeue(Q);
+    }
+    else if(Q->m_tail == process)
+    {
+        // simply remove from the end of the queue (separate bc need to update the queue's tail)
+        Q->m_tail = process->m_prev;
+        Q->m_tail->m_next = NULL;
+        process->m_next = NULL;
+        process->m_prev = NULL;
+    }
+    else
+    {
+        // normal case- remove from middle of the list
+        process->m_prev->m_next = process->m_next;
+        process->m_next->m_prev = process->m_prev;
+        process->m_next = NULL;
+        process->m_prev = NULL;
+    }
+    Q->m_size--;
 }
 
 // return the PCB with pid in the given queue, or NULL if there is not one

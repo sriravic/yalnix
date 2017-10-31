@@ -2,6 +2,7 @@
 #include <process.h>
 #include <syscalls.h>
 #include <yalnix.h>
+#include <scheduler.h>
 
 int debug = 1;
 
@@ -79,6 +80,8 @@ void interruptKernel(UserContext* ctx)
 			break;
 		case YALNIX_EXIT:
 			{
+				int status = 42;
+				kernelExit(status);
 
 			}
 			break;
@@ -184,16 +187,14 @@ void interruptClock(UserContext* ctx)
 	}
 	currPCB->m_ticks++;
 
-	// decrement the sleep time of the gSleepBlockedQ
-	PCB* sleepingPCB = getHeadProcess(&gSleepBlockedQ);
-	if(sleepingPCB != NULL) {
-		sleepingPCB->m_timeToSleep--;
-		// sleeping process wakes up, move it to ready to run
-		if(sleepingPCB->m_timeToSleep == 0) {
-			processEnqueue(&gReadyToRunProcessQ, sleepingPCB);
-			processDequeue(&gSleepBlockedQ);
-		}
-	}
+	/* Decrement the sleep time of each PCB in the sleep queue
+	 * If the PCB's sleep time is zero, it will be moved to the ready to run queue
+	*/
+	scheduleSleepingProcesses();
+
+	/* Exit logic?
+	*/
+
 	// if this process has run for too long
 	// say 3 ticks, then swap it with a different process in the ready to run queue
 	if(currPCB->m_ticks > 2)

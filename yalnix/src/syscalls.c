@@ -456,11 +456,20 @@ int kernelExec(char *name, char **args)
 }
 
 // Exit terminates the calling process
-void kernelExit(int status) {
-	// Move the calling process to the gDead list
-	// Free all the memory associated with the process
-    // Save the status
-
+void kernelExit(int status)
+{
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    if(currPCB->m_pid == 0)
+    {
+        // If init exits, halt the system
+        Halt();
+    }
+    else if()
+    {
+        // if the process has a parent, save its exit data
+        // Save the status in its parents list
+    }
+	// Move the calling process to the gDead list and free all the memory associated with the process
 }
 
 // Wait

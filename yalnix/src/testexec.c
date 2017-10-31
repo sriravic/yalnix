@@ -8,11 +8,8 @@ int main(int argc, char** argv)
         TracePrintf(0, "Fork success - child process - Exec-ing now\n");
         char* args[] = {"helloworld"};
         rc = Exec("helloworld", args);
-        if(rc != SUCCESS)
-        {
-            TracePrintf(0, "Exec failed\n");
-            return -1;
-        }
+        TracePrintf(0, "Exec failed\n");
+        return -1;
     }
     else
     {
