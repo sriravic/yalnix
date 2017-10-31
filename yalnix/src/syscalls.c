@@ -363,13 +363,15 @@ int kernelExec(char *name, char **args)
          * All pages for the new address space are now in the page table.
          * But they are not yet in the TLB, remember!
          */
+         WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
          /*
          * Read the text from the file into memory.
          */
          lseek(fd, li.t_faddr, SEEK_SET);
          segment_size = li.t_npg << PAGESHIFT;
-         if (read(fd, (void *) li.t_vaddr, segment_size) != segment_size)
+         int code = read(fd, (void *) li.t_vaddr, segment_size);
+         if (code != segment_size)
          {
              close(fd);
              TracePrintf(0, "Copy program text failed\n");

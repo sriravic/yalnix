@@ -73,7 +73,7 @@ void interruptKernel(UserContext* ctx)
 				{
 					// Start executing from the pc and sp pointers that
 					// were filled in the Exec system call.
-					memcpy(ctx, currpcb);
+					memcpy(ctx, currpcb, sizeof(UserContext));
 				}
 			}
 			break;

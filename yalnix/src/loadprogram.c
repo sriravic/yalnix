@@ -16,7 +16,7 @@ extern FrameTableEntry gUsedFramePool;
  *  the Linux file named "name", and its arguments come from the array at
  *  "args", which is in standard argv format.  The argument "proc" points
  *  to the process or PCB structure for the process into which the program
- *  is to be loaded. 
+ *  is to be loaded.
  */
 int LoadProgram(char *name, char *args[], PCB* pcb)
 {
@@ -37,7 +37,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     char *argbuf;
 
    /*
-   * Open the executable file 
+   * Open the executable file
    */
     if ((fd = open(name, O_RDONLY)) < 0) {
         TracePrintf(0, "LoadProgram: can't open file '%s'\n", name);
@@ -76,7 +76,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     argcount = i;
 
     TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
-    
+
     /*
     *  The arguments will get copied starting at "cp", and the argv
     *  pointers to the arguments (and the argc value) will get built
@@ -89,8 +89,8 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     cp = ((char *)VMEM_1_LIMIT) - size;
 
     cpp = (char **)
-        (((int)cp - 
-        ((argcount + 3 + POST_ARGV_NULL_SPACE) *sizeof (void *))) 
+        (((int)cp -
+        ((argcount + 3 + POST_ARGV_NULL_SPACE) *sizeof (void *)))
         & ~7);
 
     /*
@@ -102,7 +102,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     TracePrintf(1, "prog_size %d, text %d data %d bss %d pages\n",
     li.t_npg + data_npg, li.t_npg, li.id_npg, li.ud_npg);
 
-    /* 
+    /*
     * Compute how many pages we need for the stack */
     stack_npg = (VMEM_1_LIMIT - DOWN_TO_PAGE(cp2)) >> PAGESHIFT;
 
@@ -152,10 +152,10 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     * program into memory.  Get the right number of physical pages
     * allocated, and set them all to writable.
     */
-    
+
     //Throw away the old region 1 virtual address space of the
     // curent process by freeing
-    // all physical pages currently mapped to region 1, and setting all 
+    // all physical pages currently mapped to region 1, and setting all
     // region 1 PTEs to invalid.
     // Since the currently active address space will be overwritten
     // by the new program, it is just as easy to free all the physical
@@ -167,7 +167,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
 
     PageTable* pt = pcb->m_pt;
     int region;
-    
+
     // invalidate all the pages for region 1
     // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
     for(region = NUM_VPN >> 1; region < NUM_VPN; region++)
@@ -177,12 +177,12 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
             freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].pfn);
             pt->m_pte[region].valid = 0;
         }
-        
+
     }
 
     // Allocate "li.t_npg" physical pages and map them starting at
-    // the "text_pg1" page in region 1 address space.  
-    // These pages should be marked valid, with a protection of 
+    // the "text_pg1" page in region 1 address space.
+    // These pages should be marked valid, with a protection of
     // (PROT_READ | PROT_WRITE).
     int pg;
     int allocPages = 0;
@@ -197,8 +197,8 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     }
 
     // Allocate "data_npg" physical pages and map them starting at
-    // the  "data_pg1" in region 1 address space.  
-    // These pages should be marked valid, with a protection of 
+    // the  "data_pg1" in region 1 address space.
+    // These pages should be marked valid, with a protection of
     // (PROT_READ | PROT_WRITE).
     allocPages = 0;
     for(pg = data_pg1 + r1offset; pg < NUM_VPN && allocPages < data_npg; pg++)
@@ -231,9 +231,10 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     }
 
     /*
-    * All pages for the new address space are now in the page table.  
+    * All pages for the new address space are now in the page table.
     * But they are not yet in the TLB, remember!
     */
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
     /*
     * Read the text from the file into memory.
@@ -269,7 +270,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
 
     // Change the protection on the "li.t_npg" pages starting at
     // virtual address VMEM_1_BASE + (text_pg1 << PAGESHIFT).  Note
-    // that these pages will have indices starting at text_pg1 in 
+    // that these pages will have indices starting at text_pg1 in
     // the page table for region 1.
     // The new protection should be (PROT_READ | PROT_EXEC).
     // If any of these page table entries is also in the TLB, either
