@@ -150,63 +150,15 @@ int kernelFork(void)
 int kernelExec(char *name, char **args)
 {
     // Get the pcb of the calling process
-    PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
-    PageTable* currpt = parentpcb->m_pt;
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    PageTable* currpt = currpcb->m_pt;
 
-    // Create a pcb and page table entries
-    PCB* childpcb = (PCB*)malloc(sizeof(PCB));
-    PageTable* childpt = (PageTable*)malloc(sizeof(PageTable));
-    memset(childpt, 0, sizeof(PageTable));
-    UserContext* chilductx = (UserContext*)malloc(sizeof(UserContext));
-
-    if(parentpcb != NULL && childpcb != NULL && childpt != NULL && chilductx != NULL)
+    if(currpcb != NULL && currpt != NULL)
     {
-        // setup the child pcb
-        childpcb->m_pid = gPID++;
-        childpcb->m_ppid = parentpcb->m_pid;
-        childpcb->m_state = PROCESS_READY;
-        childpcb->m_ticks = 0;
-        childpcb->m_timeToSleep = 0;
-        childpcb->m_pt = childpt;
-        childpcb->m_brk = 0;                // this is setup by the loader code
-        childpcb->m_uctx = chilductx;       // we will update this structure with the loading code
-        childpcb->m_kctx = NULL;            // will get initialized during the kernel switch
-
-        // R0 region setup code
-        // copy the entries of the region 0 up to kernel stack size
-        int pg;
-        int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
-        int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
-        int r1Pages = DOWN_TO_PAGE(VMEM_LIMIT) / PAGESIZE;
-        for(pg = 0; pg < r0kernelPages; pg++)
-        {
-            // copy r0 pages if only they are valid
-            // plus they point to the same physical frames in memory
-            // we don't copy the contents into new frames since all processes
-            // share the same kernel r0 address space
-            if(currpt->m_pte[pg].valid == 1)
-            {
-                childpt->m_pte[pg].valid = 1;
-                childpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                childpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
-            }
-        }
-
-        // add two pages for kernel stack since they are unique to each process.
-        for(pg = r0kernelPages; pg < r0StackPages; pg++)
-        {
-            FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-            if(frame != NULL)
-            {
-                childpt->m_pte[pg].valid = 1;
-                childpt->m_pte[pg].prot = PROT_READ|PROT_WRITE;
-                childpt->m_pte[pg].pfn = frame->m_frameNumber;
-            }
-            else
-            {
-                TracePrintf(0, "Error allocating physical frames for the kernel region0 of forked process");
-            }
-        }
+        // clear some entries in the pcb
+        currpcb->m_state = PROCESS_READY;
+        currpcb->m_ticks = 0;
+        currpcb->m_timeToSleep = 0;
 
         // R1 region setup code
         int fd;
@@ -258,7 +210,8 @@ int kernelExec(char *name, char **args)
          *  arguments, to become the argc that the new "main" gets called with.
          */
          size = 0;
-         for (i = 0; args[i] != NULL; i++) {
+         for (i = 0; args[i] != NULL; i++)
+         {
              TracePrintf(3, "counting arg %d = '%s'\n", i, args[i]);
              size += strlen(args[i]) + 1;
          }
@@ -315,7 +268,7 @@ int kernelExec(char *name, char **args)
          /*
          * Set the new stack pointer value in the process's exception frame.
          */
-         childpcb->m_uctx->sp = cp2;
+         currpcb->m_uctx->sp = cp2;
 
          /*
          * Now save the arguments in a separate buffer in region 0, since
@@ -326,9 +279,9 @@ int kernelExec(char *name, char **args)
          {
              for (i = 0; args[i] != NULL; i++)
              {
-             TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
-             strcpy(cp2, args[i]);
-             cp2 += strlen(cp2) + 1;
+                 TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
+                 strcpy(cp2, args[i]);
+                 cp2 += strlen(cp2) + 1;
              }
          }
          else
@@ -342,12 +295,7 @@ int kernelExec(char *name, char **args)
          * program into memory.  Get the right number of physical pages
          * allocated, and set them all to writable.
          */
-
-         // set the active pagetables to the new process
-         PageTable* pt = childpt;
-         unsigned int r0offset = NUM_VPN >> 1;
-         WriteRegister(REG_PTBR1, (unsigned int)(childpt->m_pte + r0offset));
-         WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+         PageTable* pt = currpt;
 
          // invalidate all the pages for region 1
          // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
@@ -366,6 +314,7 @@ int kernelExec(char *name, char **args)
          // These pages should be marked valid, with a protection of
          // (PROT_READ | PROT_WRITE).
          int allocPages = 0;
+         int pg;
          unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
          for(pg = text_pg1 + r1offset; pg < NUM_VPN && allocPages < li.t_npg; pg++)
          {
@@ -391,7 +340,7 @@ int kernelExec(char *name, char **args)
          }
 
          // set the brk of the heap to be the base address of the next page above datasegment
-         childpcb->m_brk = pg * PAGESIZE;
+         currpcb->m_brk = pg * PAGESIZE;
 
          /*
          * Allocate memory for the user stack too.
@@ -475,7 +424,7 @@ int kernelExec(char *name, char **args)
          /*
          * Set the entry point in the exception frame.
          */
-         childpcb->m_uctx->pc = (caddr_t) li.entry;
+         currpcb->m_uctx->pc = (caddr_t) li.entry;
 
          /*
          * Now, finally, build the argument list on the new stack.
@@ -498,15 +447,8 @@ int kernelExec(char *name, char **args)
          *cpp++ = NULL;			/* the last argv is a NULL pointer */
          *cpp++ = NULL;			/* a NULL pointer for an empty envp */
 
-
-         // We have successfully created the process
-         // add it to the ready-to-run queue
-         processEnqueue(&gReadyToRunProcessQ, childpcb);
-
          // reset the pagetables to the calling process
-         WriteRegister(REG_PTBR1, (unsigned int)(parentpcb->m_pt->m_pte + r0offset));
          WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
-
          return SUCCESS;
     }
 }

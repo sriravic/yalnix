@@ -58,18 +58,22 @@ void interruptKernel(UserContext* ctx)
 			{
 				// the return codes are stored in the pcb's user context
 				// update the child's kernel context
-				PCB* parentpcb = getHeadProcess(&gRunningProcessQ);
-				memcpy(parentpcb->m_uctx, ctx, sizeof(UserContext));
-				int rc = SUCCESS;
-				//int rc = kernelExec();
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+				char* filename = (char*)(ctx->regs[0]);
+				char** argvec = (char**)(ctx->regs[1]);
+				TracePrintf(0, "Exec arg0 : %s\n", filename);
+				TracePrintf(0, "Exec argv[0]: %s\n", argvec[0]);
+				int rc = kernelExec(filename, argvec);
 				if(rc != SUCCESS)
 				{
 					TracePrintf(0, "Exec failed\n");
 				}
 				else
 				{
-					// Do nothing. we have scheduled the process to run
-					// we are good to go
+					// Start executing from the pc and sp pointers that
+					// were filled in the Exec system call.
+					memcpy(ctx, currpcb);
 				}
 			}
 			break;
