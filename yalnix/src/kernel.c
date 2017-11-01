@@ -376,10 +376,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// swap out the page tables
 	// We need to do this because, further virtual address references have to go to the correct frames
 	// load program basically copies text, data into virtual addresses. so the pagetables should reflect this.
-	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);
-	WriteRegister(REG_PTBR1, (unsigned int)(pInitPCB->m_pt->m_pte + gNumPagesR0));
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+	swapPageTable(pInitPCB);
 
 	// Call load program
 	int statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
@@ -476,10 +473,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_edQ = idleEDQ;
 
 	// reset to idle's pagetables for successfulyl loading
-	WriteRegister(REG_PTBR0, (unsigned int)pIdlePCB->m_pt->m_pte);
-	WriteRegister(REG_PTBR1, (unsigned int)(pIdlePCB->m_pt->m_pte + gNumPagesR0));
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+	swapPageTable(pIdlePCB);
 
 	char idleprog[] = "testexec";
 	char* tempargs[] = {NULL};
@@ -499,10 +493,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	processEnqueue(&gReadyToRunProcessQ, pIdlePCB);
 
 	// Reset to init's page tables
-	WriteRegister(REG_PTBR0, (unsigned int)pInitPCB->m_pt->m_pte);
-	WriteRegister(REG_PTBR1, (unsigned int)(pInitPCB->m_pt->m_pte + gNumPagesR0));
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
-	WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+	swapPageTable(pInitPCB);
 
 	// start running from this process.
 	uctx->pc = pInitPCB->m_uctx->pc;
