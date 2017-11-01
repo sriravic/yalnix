@@ -464,12 +464,41 @@ void kernelExit(int status)
         // If init exits, halt the system
         Halt();
     }
-    else if()
+
+    // get the parent PCB of the calling process if it exists
+    PCB* parentPCB = getPcbByPid(&gReadyToRunProcessQ, currPCB->m_ppid);
+    if(parentPCB == NULL)
     {
-        // if the process has a parent, save its exit data
-        // Save the status in its parents list
+        parentPCB = getPcbByPid(&gSleepBlockedQ, currPCB->m_ppid);
     }
-	// Move the calling process to the gDead list and free all the memory associated with the process
+    if(parentPCB == NULL)
+    {
+        parentPCB = getPcbByPid(&gWaitProcessQ, currPCB->m_ppid);
+    }
+
+    // if the process has a parent, save its exit data into its parents list
+    if(parentPCB != NULL)
+    {
+        // create the exit data struct
+        ExitData* exitData = (ExitData*)malloc(sizeof(ExitData));
+        if(exitData == NULL)
+        {
+            TracePrintf(0, "Failed to malloc for exit data\n");
+            exit(-1);
+        }
+        exitData->m_status = status;
+        exitData->m_pid = currPCB->m_pid;
+
+        // put the exit data into the parents exit data queue
+        exitDataEnqueue(parentPCB->m_edQ, exitData);
+    }
+
+	// Free all the memory associated with the process
+    // TODO free memory
+
+    // Move the calling process to the terminated process queue
+    processDequeue(&gRunningProcessQ);
+    processEnqueue(&gTerminatedProcessQ, currPCB);
 }
 
 // Wait
@@ -478,9 +507,9 @@ int kernelWait(int *status_ptr) {
     ExitData* exitData = exitDataDequeue(currPCB->m_edQ);
     // find if the running process has children by trawling the process queues
     bool hasChildProcess =
-        getChildOfPid(&gReadyToRunProcessQ, currPCB->m_pid) != NULL ||
-        getChildOfPid(&gWaitProcessQ, currPCB->m_pid) != NULL ||
-        getChildOfPid(&gSleepBlockedQ, currPCB->m_pid) != NULL;
+        getChildOfPpid(&gReadyToRunProcessQ, currPCB->m_pid) != NULL ||
+        getChildOfPpid(&gWaitProcessQ, currPCB->m_pid) != NULL ||
+        getChildOfPpid(&gSleepBlockedQ, currPCB->m_pid) != NULL;
 
     if (!hasChildProcess && exitData == NULL)
     {

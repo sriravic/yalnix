@@ -98,13 +98,13 @@ PCB* getPcbByPid(PCBQueue* Q, unsigned int pid)
     return NULL;
 }
 
-// return the first PCB that is a child of the given pid, or NULL if there is not one
-PCB* getChildOfPid(PCBQueue* Q, unsigned int pid)
+// return the first PCB that is a child of the given ppid, or NULL if there is not one
+PCB* getChildOfPpid(PCBQueue* Q, unsigned int ppid)
 {
     PCB* curr = Q->m_head;
     while(curr != NULL)
     {
-        if(curr->m_ppid == pid)
+        if(curr->m_ppid == ppid)
         {
             return curr;
         }

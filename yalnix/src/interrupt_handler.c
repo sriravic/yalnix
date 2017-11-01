@@ -80,7 +80,7 @@ void interruptKernel(UserContext* ctx)
 			break;
 		case YALNIX_EXIT:
 			{
-				int status = 42;
+				int status = 42;	// figure out how to get the real status
 				kernelExit(status);
 
 			}

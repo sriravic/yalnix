@@ -66,7 +66,7 @@ PCB* processDequeue(PCBQueue* Q);
 void processEnqueue(PCBQueue* Q, PCB* process);
 void processRemove(PCBQueue* Q, PCB* process);
 PCB* getPcbByPid(PCBQueue* Q, unsigned int pid);
-PCB* getChildOfPid(PCBQueue* Q, unsigned int pid);
+PCB* getChildOfPpid(PCBQueue* Q, unsigned int ppid);
 PCB* getHeadProcess(PCBQueue* Q);
 bool isEmptyProcessQueue(PCBQueue* Q);
 int getProcessQueueSize(PCBQueue* Q);
