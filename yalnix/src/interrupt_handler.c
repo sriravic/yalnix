@@ -251,6 +251,14 @@ void interruptIllegal(UserContext* ctx)
 // Interrupt handler for memory
 void interruptMemory(UserContext* ctx)
 {
+	int code = ctx->code;
+	if(code == YALNIX_ACCERR)
+	{
+		TracePrintf(0, "Memory trap for a page with invalid access permissions\n");
+		// TODO: How to handle this???
+		return;
+	}
+
 	// Get the current running processes pcb
 	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 
