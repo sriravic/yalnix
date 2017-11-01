@@ -2,6 +2,7 @@
 #include <process.h>
 #include <syscalls.h>
 #include <yalnix.h>
+#include <yalnixutils.h>
 #include <scheduler.h>
 
 int debug = 1;
@@ -82,7 +83,6 @@ void interruptKernel(UserContext* ctx)
 			{
 				int status = 42;	// figure out how to get the real status
 				kernelExit(status);
-
 			}
 			break;
         case YALNIX_WAIT:
@@ -125,7 +125,7 @@ void interruptKernel(UserContext* ctx)
 				ctx->regs[0] = (u_long)pid;
             }
             break;
-			case YALNIX_DELAY:
+		case YALNIX_DELAY:
 				{
 					int clock_ticks = ctx->regs[0];
 					int rc = kernelDelay(clock_ticks);
@@ -161,6 +161,10 @@ void interruptKernel(UserContext* ctx)
         	default:
             // all others are not implemented syscalls are not implemented.
             	break;
+		case YALNIX_TTY_READ:
+			break;
+		case YALNIX_TTY_WRITE:
+			break;
 	}
 }
 
@@ -247,25 +251,61 @@ void interruptIllegal(UserContext* ctx)
 // Interrupt handler for memory
 void interruptMemory(UserContext* ctx)
 {
-	// check for stack brk or dynamic brk
-	// if stack brk, then allocate a new pages
-		// and map it to page tables.
-		// return back to continue execution of the current process
-	// if heap brk required
-		// check if frames are available for allocation
-		// if frames are available, allocate the frame,
-		// map the frames to pages in pagetable entry
-		// update the sbrk/brk values for the process
-	// If at any point the stack grows into the heap,
-		// log and quit the process.
-	unsigned int loc = (unsigned int)ctx->addr;
-	unsigned int pg = (loc) / PAGESIZE;
-	unsigned int nextpg = UP_TO_PAGE(loc) / PAGESIZE;
-	unsigned int lowpg = DOWN_TO_PAGE(loc) / PAGESIZE;
+	// Get the current running processes pcb
 	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-	TracePrintf(0, "Trap location : 0X%08X\n", (unsigned int)ctx->addr);
-	TracePrintf(0, "Max VM location : 0x%08X\n", VMEM_1_LIMIT);
-	TracePrintf(0, "TRAP_MEMORY.\n");
+
+	// compute the locations of the page from the top of the VM
+	// and also get the location of the brk of the process
+	unsigned int loc = (unsigned int)ctx->addr;
+	unsigned int brkloc = (unsigned int)currPCB->m_brk;
+	unsigned int pg = (loc) / PAGESIZE;
+	unsigned int brkpg = (brkloc) / PAGESIZE;
+	if(currPCB->m_pt->m_pte[pg].valid == 0)
+	{
+		// check to make sure that we are not silently growing into the heap.!!
+		if(pg - brkpg > 2)
+		{
+			// we might be actually requesting for a large chunk of frames
+			// and not just a single frame. Hence we start from the top of the VM region
+			// move down the page table, and once we start encountering the invalid pages, we
+			// allocate frames till we reach the page where the trap was invoked.
+			// this might seem wasteful, but we have no clear way to store the current
+			// stack page.
+			// TODO: Add a PCB entry for the stack region of each process in R1.
+
+			unsigned int r1Top = VMEM_1_LIMIT / PAGESIZE;
+			int currpg;
+			for(currpg = r1Top; currpg >= pg; currpg--)
+			{
+				if(currPCB->m_pt->m_pte[currpg].valid == 1) continue;
+				else
+				{
+					// started finding the invalid pages.
+					FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+					if(frame != NULL)
+					{
+						currPCB->m_pt->m_pte[pg].valid = 1;
+						currPCB->m_pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+						currPCB->m_pt->m_pte[pg].pfn = frame->m_frameNumber;
+					}
+					else
+					{
+						TracePrintf(0, "Could not find one free page\n");
+					}
+				}
+			}
+		}
+		else
+		{
+			TracePrintf(0, "User program stack region exhausted and might grow into heap.!\n");
+			TracePrintf(0, "Not allocating the requested page\n");
+			// TODO: kill the process and move it to terminated queue.
+		}
+	}
+	else
+	{
+		TracePrintf(0, "Interrupt memory in a page that is valid? Something fishy!\n");
+	}
 }
 
 // Interrupt handler for math traps
