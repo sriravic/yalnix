@@ -243,14 +243,20 @@ void interruptClock(UserContext* ctx)
 // Interrupt handler for illegal instruction
 void interruptIllegal(UserContext* ctx)
 {
-	// display the error to log
-	// kill the process
-		// move the process from running to dead queue
+	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+	TracePrintf(0, "Illegal Interrupt Happened.\nKilling Process : %d\n", currpcb->m_pid);
+	// move the process to dead queue
+	// inform any waiting parent of this processes state.
 }
 
 // Interrupt handler for memory
 void interruptMemory(UserContext* ctx)
 {
+	// Get the current running processes pcb
+	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+	memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
+
+	// get the code for the memory interrupt.
 	int code = ctx->code;
 	if(code == YALNIX_ACCERR)
 	{
@@ -258,9 +264,6 @@ void interruptMemory(UserContext* ctx)
 		// TODO: How to handle this???
 		return;
 	}
-
-	// Get the current running processes pcb
-	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 
 	// compute the locations of the page from the top of the VM
 	// and also get the location of the brk of the process
