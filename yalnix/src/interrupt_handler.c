@@ -185,7 +185,7 @@ void interruptKernel(UserContext* ctx)
 
 				// Scheduler Logic:
 				// remove the process from the running queue
-				removeFromQueue(&gRunningProcessQ, currpcb);
+				processRemove(&gRunningProcessQ, currpcb);
 
 				// add the process to the blocked queues
 				processEnqueue(&gWriteBlockedQ, currpcb);
@@ -241,20 +241,22 @@ void interruptClock(UserContext* ctx)
 	// into ready to run queue
 	if(gReadFinishedQ.m_head != NULL)
 	{
-		PCB* process = NULL;
-		do {
-			 process = processDequeue(&gReadFinishedQ);
-			 processEnqueue(&gReadyToRunProcessQ, process);
-		} while(process != NULL);
+		PCB* process = processDequeue(&gReadFinishedQ);
+		while(process != NULL)
+		{
+			processEnqueue(&gReadyToRunProcessQ, process);
+			process = processDequeue(&gReadFinishedQ);
+		}
 	}
 
 	if(gWriteFinishedQ.m_head != NULL)
 	{
-		PCB* process = NULL;
-		do {
-			process = processDequeue(&gWriteFinishedQ);
+		PCB* process = processDequeue(&gWriteFinishedQ);
+		while(process != NULL)
+		{
 			processEnqueue(&gReadyToRunProcessQ, process);
-		} while(process != NULL);
+			process = processDequeue(&gWriteFinishedQ);
+		}
 	}
 
 	// if this process has run for too long

@@ -60,6 +60,7 @@ void processRemove(PCBQueue* Q, PCB* process)
     {
         // simply dequeue (takes care of process=head=tail also)
         processDequeue(Q);
+        return;
     }
     else if(Q->m_tail == process)
     {

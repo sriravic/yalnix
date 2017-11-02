@@ -66,13 +66,17 @@ void processOutstandingWriteRequests(int tty_id)
                 free(toProcess);
                 toProcess = temp;
             }
-            int toSend = toProcess->m_remaining;
-            toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
-            TtyTransmit(tty_id, toProcess->m_buffer + (toProcess->m_serviced), toSend);
 
-            // update the stats
-            toProcess->m_serviced += toSend;
-            toProcess->m_remaining = (toProcess->m_len) - (toProcess->m_serviced);
+            if(toProcess != NULL)
+            {
+                int toSend = toProcess->m_remaining;
+                toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
+                TtyTransmit(tty_id, toProcess->m_buffer + (toProcess->m_serviced), toSend);
+
+                // update the stats
+                toProcess->m_serviced += toSend;
+                toProcess->m_remaining = (toProcess->m_len) - (toProcess->m_serviced);
+            }
         }
     }
     else
