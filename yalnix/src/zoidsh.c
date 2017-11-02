@@ -25,6 +25,7 @@ int main(int argc, char** argv)
             int rc = TtyPrint(terminal, prompt, strlen(prompt));
 
             // wait to receive any command from the terminal
+
             // fork and exec the command
             // wait till child completes
             // print the output from child and then start prompting for input again.

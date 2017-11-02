@@ -164,6 +164,19 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_TTY_READ:
 			break;
 		case YALNIX_TTY_WRITE:
+			// copy the user context
+			{
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+
+				// call the handler
+				kernelTtyWrite(ctx->regs[0], (void*)(ctx->regs[1]), ctx->regs[1]);
+
+				// add the process to the blocked queues
+				// find a new process to run
+
+				// initiate the first transfer and wait for hardware to trap
+			}
 			break;
 	}
 }

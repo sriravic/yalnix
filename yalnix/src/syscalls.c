@@ -12,6 +12,7 @@
 
 // the global process id counter
 extern int gPID;
+extern void* gTerminalBuffer[NUM_TERMINALS];
 
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
@@ -650,7 +651,6 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
 	// Else
 		// Trap to the hardware and call interruptTtyTransmit() just once
     // Move the calling process from the gIOBlocked list to the gReadyToRun list
-    return -1;
 }
 
 int kernelPipeInit(int *pipe_idp)

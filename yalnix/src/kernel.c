@@ -4,6 +4,7 @@
 #include <load_info.h>
 #include <pagetable.h>
 #include <process.h>
+#include <terminal.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
 
@@ -43,8 +44,8 @@ void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
 
-// memory for the terminals one for each active terminal
-void* gTerminalPtrs[NUM_TERMINALS];
+// Terminal Requests header nodes
+TerminalRequest gTermReqHeads[NUM_TERMINALS];
 
 int SetKernelBrk(void* addr)
 {
@@ -329,6 +330,20 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_PTLR0, gNumPagesR0);
 	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR0);
+
+	// initialize the terminal heads
+	int term;
+	for(term = 0; term < NUM_TERMINALS; term++)
+	{
+		gTermReqHeads[term].m_code = TERM_REQ_NONE;
+		gTermReqHeads[term].m_pcb = NULL;
+		gTermReqHeads[term].m_buffer = NULL;
+		gTermReqHeads[term].m_len = 0;
+		gTermReqHeads[term].m_serviced = 0;
+		gTermReqHeads[term].m_remaining = 0;
+		gTermReqHeads[term].m_next = NULL;
+	}
+
 
 	// enable virtual memory
 	gNumFramesBeforeVM = (unsigned int)gKernelBrk / PAGESIZE;
