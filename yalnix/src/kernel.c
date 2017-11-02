@@ -28,6 +28,7 @@ unsigned int gNumPagesR1 = NUM_VPN >> 1;
 // kernel text and data
 unsigned int gKernelDataStart;
 unsigned int gKernelDataEnd;
+unsigned int gNumFramesBeforeVM;			// the number of frames that were used before VM was actually enabled.
 
 // The global PCBs
 PCBQueue gRunningProcessQ;
@@ -41,6 +42,9 @@ PCBQueue gSleepBlockedQ;
 void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
+
+// memory for the terminals one for each active terminal
+void* gTerminalPtrs[NUM_TERMINALS];
 
 int SetKernelBrk(void* addr)
 {
@@ -56,6 +60,47 @@ int SetKernelBrk(void* addr)
 		// virtual memory has been enabled.
 		// check for correct frames and update the kernel heap page tables
 		TracePrintf(0, "SetkernelBrk called after VM enabled\n");
+		unsigned int newBrkAddr = (unsigned int)addr;
+		unsigned int oldBrkAddr = (unsigned int)gKernelBrk;
+		unsigned int oldBrkPg = oldBrkAddr / PAGESIZE;
+		unsigned int newBrkPg = newBrkAddr / PAGESIZE;
+		if(newBrkAddr > oldBrkAddr)
+		{
+			// the heap was grown
+			// set the address to the new address
+			int pg;
+			for(pg = newBrkPg; pg <= newBrkPg; pg++)
+			{
+				FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+				if(frame != NULL)
+				{
+					gKernelPageTable.m_pte[pg].valid = 1;
+					gKernelPageTable.m_pte[pg].prot = PROT_READ | PROT_WRITE;
+					gKernelPageTable.m_pte[pg].pfn = frame->m_frameNumber;
+				}
+				else
+				{
+					TracePrintf(0, "Unable to find new frames for kernel brk\n");
+				}
+			}
+		}
+		else
+		{
+			TracePrintf(0, "Freeing up frames from R0 since brk was lower than original brk");
+			int pg;
+			// Free up the phyiscal frames except the ones we have not allocated to before initializing the VM
+			for(pg = oldBrkPg; pg > oldBrkPg && pg > gNumFramesBeforeVM; pg--)
+			{
+				int frame = gKernelPageTable.m_pte[pg].pfn;
+				freeOneFrame(&gFreeFramePool, &gUsedFramePool, frame);
+				gKernelPageTable.m_pte[pg].valid = 0;
+				gKernelPageTable.m_pte[pg].prot = 0;
+				gKernelPageTable.m_pte[pg].pfn = 0;
+			}
+		}
+
+		// update the brk
+		gKernelBrk = addr;
 	}
 }
 
@@ -286,6 +331,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_PTLR1, gNumPagesR0);
 
 	// enable virtual memory
+	gNumFramesBeforeVM = (unsigned int)gKernelBrk / PAGESIZE;
 	WriteRegister(REG_VM_ENABLE, 1);
 	gVMemEnabled = 1;
 
