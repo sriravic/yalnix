@@ -61,7 +61,9 @@ extern PCBQueue gWaitProcessQ;
 extern PCBQueue gTerminatedProcessQ;
 extern PCBQueue gSleepBlockedQ;
 extern PCBQueue gWriteBlockedQ;
+extern PCBQueue gWriteFinishedQ;
 extern PCBQueue gReadBlockedQ;
+extern PCBQueue gReadFinishedQ;
 
 // Function headers defined in process.c
 PCB* processDequeue(PCBQueue* Q);

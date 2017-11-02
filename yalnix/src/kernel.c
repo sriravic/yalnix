@@ -41,7 +41,9 @@ PCBQueue gWaitProcessQ;
 PCBQueue gTerminatedProcessQ;
 PCBQueue gSleepBlockedQ;
 PCBQueue gReadBlockedQ;
+PCBQueue gReadFinishedQ;
 PCBQueue gWriteBlockedQ;
+PCBQueue gWriteFinishedQ;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -329,6 +331,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	INIT_QUEUE_HEADS(gWaitProcessQ);
 	INIT_QUEUE_HEADS(gSleepBlockedQ);
 	INIT_QUEUE_HEADS(gReadBlockedQ);
+	INIT_QUEUE_HEADS(gReadFinishedQ);
+	INIT_QUEUE_HEADS(gWriteBlockedQ);
+	INIT_QUEUE_HEADS(gWriteFinishedQ);
 
 	// Set the page table entries for the kernel in the correct register before enabling VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
@@ -349,7 +354,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		gTermReqHeads[term].m_requestInitiated = 0;
 		gTermReqHeads[term].m_next = NULL;
 	}
-	
+
 	// enable virtual memory
 	gNumFramesBeforeVM = (unsigned int)gKernelBrk / PAGESIZE;
 	WriteRegister(REG_VM_ENABLE, 1);

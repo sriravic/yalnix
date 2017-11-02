@@ -50,13 +50,14 @@ void processOutstandingWriteRequests(int tty_id)
     if(tty_id < NUM_TERMINALS)
     {
         TerminalRequest head = gTermReqHeads[tty_id];
-        TerminalRequest* toProcess = head->m_next;
+        TerminalRequest* toProcess = head.m_next;
         if(toProcess != NULL)
         {
             if(toProcess->m_remaining == 0)
             {
                 // this was a previous request that has been completed
                 // free up the resources
+                processEnqueue(&gWriteFinishedQ, toProcess->m_pcb);
                 TerminalRequest* temp = toProcess->m_next;
                 free(toProcess->m_buffer);
                 free(toProcess);

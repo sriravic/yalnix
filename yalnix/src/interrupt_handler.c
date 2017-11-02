@@ -1,9 +1,10 @@
 #include <interrupt_handler.h>
 #include <process.h>
+#include <scheduler.h>
 #include <syscalls.h>
+#include <terminal.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
-#include <scheduler.h>
 
 int debug = 1;
 
@@ -169,17 +170,17 @@ void interruptKernel(UserContext* ctx)
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
-				int len = ctx->regs[2]);
+				int len = ctx->regs[2];
 				kernelTtyWrite(tty_id, buf, len);
 
 				// initiate the first transfer and wait for hardware to trap
-				if(gTermReqHeads[tty_id]->m_requestInitiated == 0)
+				if(gTermReqHeads[tty_id].m_requestInitiated == 0)
 				{
 					// initiate the handling of a transfer.
 					// the future remaining requests are handled by the trap handler
 					// when the terminal fires up the interrupts.
 					processOutstandingWriteRequests(ctx->regs[0]);
-					gTermReqHeads[tty_id]->m_requestInitiated = 1;
+					gTermReqHeads[tty_id].m_requestInitiated = 1;
 				}
 
 				// Scheduler Logic:
@@ -235,6 +236,26 @@ void interruptClock(UserContext* ctx)
 
 	/* Exit logic?
 	*/
+
+	// check if any process that was in the readfinished or writefinished queue is ready to be moved
+	// into ready to run queue
+	if(gReadFinishedQ.m_head != NULL)
+	{
+		PCB* process = NULL;
+		do {
+			 process = processDequeue(&gReadFinishedQ);
+			 processEnqueue(&gReadyToRunProcessQ, process);
+		} while(process != NULL);
+	}
+
+	if(gWriteFinishedQ.m_head != NULL)
+	{
+		PCB* process = NULL;
+		do {
+			process = processDequeue(&gWriteFinishedQ);
+			processEnqueue(&gReadyToRunProcessQ, process);
+		} while(process != NULL);
+	}
 
 	// if this process has run for too long
 	// say 3 ticks, then swap it with a different process in the ready to run queue
@@ -381,7 +402,7 @@ void interruptTtyTransmit(UserContext* ctx)
 	// in case of a valid command for process
 		// call fork() - exec with the parameters
 	int tty_id = ctx->code;
-	processOutstandingRequests(tty_id);
+	processOutstandingWriteRequests(tty_id);
 }
 
 // This is a dummy interrupt handler that does nothing.

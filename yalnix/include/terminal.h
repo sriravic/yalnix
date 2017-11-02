@@ -6,6 +6,7 @@
 #define __TERMINAL_H__
 
 #include <hardware.h>
+#include <process.h>
 #include <yalnix.h>
 
 enum TermReqCode
