@@ -4,11 +4,11 @@ void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int 
 {
     if(tty_id < NUM_TERMINALS)
     {
-        TerminalRequest head = gTermReqHeads[tty_id];
+        TerminalRequest* head = &gTermReqHeads[tty_id];
 
         // find the first empty slot
-        TerminalRequest* curr = head.m_next;
-        TerminalRequest* next = curr;
+        TerminalRequest* curr = head;
+        TerminalRequest* next = curr->m_next;
         while(next != NULL)
         {
             curr = next;
@@ -37,7 +37,10 @@ void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int 
             }
 
         }
-        TracePrintf(0, "Error: Couldnt allocate memory for terminal request");
+        else
+        {
+            TracePrintf(0, "Error: Couldnt allocate memory for terminal request");
+        }
     }
     else
     {
@@ -49,8 +52,8 @@ void processOutstandingWriteRequests(int tty_id)
 {
     if(tty_id < NUM_TERMINALS)
     {
-        TerminalRequest head = gTermReqHeads[tty_id];
-        TerminalRequest* toProcess = head.m_next;
+        TerminalRequest* head = &gTermReqHeads[tty_id];
+        TerminalRequest* toProcess = head->m_next;
         if(toProcess != NULL)
         {
             if(toProcess->m_remaining == 0)

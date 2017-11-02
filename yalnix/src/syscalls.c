@@ -645,7 +645,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
 {
     // Add a request to the terminal queue
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    addTerminalRequest(currpcb, TERM_REQ_WRITE, tty_id, buf, len);
+    addTerminalRequest(currpcb, tty_id, TERM_REQ_WRITE, buf, len);
 }
 
 int kernelPipeInit(int *pipe_idp)
