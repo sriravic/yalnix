@@ -61,6 +61,7 @@ void processOutstandingWriteRequests(int tty_id)
                 // this was a previous request that has been completed
                 // free up the resources
                 processEnqueue(&gWriteFinishedQ, toProcess->m_pcb);
+                processRemove(&gWriteBlockedQ, toProcess->m_pcb);
                 TerminalRequest* temp = toProcess->m_next;
                 free(toProcess->m_buffer);
                 free(toProcess);
@@ -76,6 +77,12 @@ void processOutstandingWriteRequests(int tty_id)
                 // update the stats
                 toProcess->m_serviced += toSend;
                 toProcess->m_remaining = (toProcess->m_len) - (toProcess->m_serviced);
+            }
+            else
+            {
+                // no more processes to initate the transmit to terminal
+                // set the flag
+                head->m_requestInitiated = 0;
             }
         }
     }
