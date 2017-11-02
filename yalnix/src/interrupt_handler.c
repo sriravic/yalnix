@@ -167,15 +167,39 @@ void interruptKernel(UserContext* ctx)
 			// copy the user context
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-
-				// call the handler
-				kernelTtyWrite(ctx->regs[0], (void*)(ctx->regs[1]), ctx->regs[1]);
-
-				// add the process to the blocked queues
-				// find a new process to run
+				int tty_id = ctx->regs[0];
+				void* buf = (void*)(ctx->regs[1]);
+				int len = ctx->regs[2]);
+				kernelTtyWrite(tty_id, buf, len);
 
 				// initiate the first transfer and wait for hardware to trap
+				if(gTermReqHeads[tty_id]->m_requestInitiated == 0)
+				{
+					// initiate the handling of a transfer.
+					// the future remaining requests are handled by the trap handler
+					// when the terminal fires up the interrupts.
+					processOutstandingWriteRequests(ctx->regs[0]);
+					gTermReqHeads[tty_id]->m_requestInitiated = 1;
+				}
+
+				// Scheduler Logic:
+				// remove the process from the running queue
+				removeFromQueue(&gRunningProcessQ, currpcb);
+
+				// add the process to the blocked queues
+				processEnqueue(&gWriteBlockedQ, currpcb);
+
+				// find a new process to run in this processes place.
+				PCB* nextprocess = processDequeue(&gReadyToRunProcessQ);
+				if(nextprocess != NULL)
+				{
+					processEnqueue(&gRunningProcessQ, nextprocess);
+					memcpy(ctx, nextprocess->m_uctx, sizeof(UserContext));
+				}
+				else
+				{
+					TracePrintf(0, "Error: No process to run.!!\n");
+				}
 			}
 			break;
 	}
@@ -356,6 +380,8 @@ void interruptTtyTransmit(UserContext* ctx)
 	// move the data to any process that is waiting on terminal data/
 	// in case of a valid command for process
 		// call fork() - exec with the parameters
+	int tty_id = ctx->code;
+	processOutstandingRequests(tty_id);
 }
 
 // This is a dummy interrupt handler that does nothing.

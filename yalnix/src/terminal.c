@@ -1,6 +1,6 @@
 #include <terminal.h>
 
-void AddTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
+void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
 {
     if(tty_id < NUM_TERMINALS)
     {
@@ -43,4 +43,37 @@ void AddTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int 
     {
         TracePrintf(0, "Invalid terminal number provided\n");
     }
+}
+
+void processOutstandingWriteRequests(int tty_id)
+{
+    if(tty_id < NUM_TERMINALS)
+    {
+        TerminalRequest head = gTermReqHeads[tty_id];
+        TerminalRequest* toProcess = head->m_next;
+        if(toProcess != NULL)
+        {
+            if(toProcess->m_remaining == 0)
+            {
+                // this was a previous request that has been completed
+                // free up the resources
+                TerminalRequest* temp = toProcess->m_next;
+                free(toProcess->m_buffer);
+                free(toProcess);
+                toProcess = temp;
+            }
+            int toSend = toProcess->m_remaining;
+            toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
+            TtyTransmit(tty_id, toProcess->m_buffer + (toProcess->m_serviced), toSend);
+
+            // update the stats
+            toProcess->m_serviced += toSend;
+            toProcess->m_remaining = (toProcess->m_len) - (toProcess->m_serviced);
+        }
+    }
+    else
+    {
+        TracePrintf(0, "Invalid terminal id supplied for processing outstanding requests\n");
+    }
+
 }

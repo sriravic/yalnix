@@ -8,6 +8,9 @@
 #include <yalnix.h>
 #include <yalnixutils.h>
 
+// convenient macros
+#define INIT_QUEUE_HEADS(A) { A.m_head = NULL; A.m_tail = NULL; }
+
 // some extern functions
 extern int LoadProgram(char *name, char *args[], PCB* pcb);
 
@@ -37,6 +40,8 @@ PCBQueue gReadyToRunProcessQ;
 PCBQueue gWaitProcessQ;
 PCBQueue gTerminatedProcessQ;
 PCBQueue gSleepBlockedQ;
+PCBQueue gReadBlockedQ;
+PCBQueue gWriteBlockedQ;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -318,14 +323,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 
 	// create the initial process queues
-	gRunningProcessQ.m_head = NULL; gRunningProcessQ.m_tail = NULL;
-	gTerminatedProcessQ.m_head = NULL; gTerminatedProcessQ.m_tail = NULL;
-	gReadyToRunProcessQ.m_head = NULL; gReadyToRunProcessQ.m_tail = NULL;
-	gWaitProcessQ.m_head = NULL; gWaitProcessQ.m_tail = NULL;
-	gSleepBlockedQ.m_head = NULL; gSleepBlockedQ.m_tail = NULL;
+	INIT_QUEUE_HEADS(gRunningProcessQ);
+	INIT_QUEUE_HEADS(gTerminatedProcessQ);
+	INIT_QUEUE_HEADS(gReadyToRunProcessQ);
+	INIT_QUEUE_HEADS(gWaitProcessQ);
+	INIT_QUEUE_HEADS(gSleepBlockedQ);
+	INIT_QUEUE_HEADS(gReadBlockedQ);
 
-	// Set the page table entries for the kernel in the correct register before enabling
-	// VM
+	// Set the page table entries for the kernel in the correct register before enabling VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
 	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
@@ -341,10 +346,10 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		gTermReqHeads[term].m_len = 0;
 		gTermReqHeads[term].m_serviced = 0;
 		gTermReqHeads[term].m_remaining = 0;
+		gTermReqHeads[term].m_requestInitiated = 0;
 		gTermReqHeads[term].m_next = NULL;
 	}
-
-
+	
 	// enable virtual memory
 	gNumFramesBeforeVM = (unsigned int)gKernelBrk / PAGESIZE;
 	WriteRegister(REG_VM_ENABLE, 1);

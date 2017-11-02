@@ -27,7 +27,8 @@ struct TerminalRequest
     int m_len;                          // the size of the read or write request
     int m_serviced;                     // the amount of data that has been sent or read so far.
     int m_remaining;                    // redundant but convenient check to keep track of how much data is to processed = m_len - m_serviced
-    struct TerminalRequest* m_next;            // store the next request as a linked list
+    int m_requestInitiated;             // we will use this field to tell the kernel if there has been a request that has already been started. this field is valid only within the head
+    struct TerminalRequest* m_next;     // store the next request as a linked list
 };
 
 typedef struct TerminalRequest TerminalRequest;
@@ -37,6 +38,7 @@ typedef struct TerminalRequest TerminalRequest;
 extern TerminalRequest gTermReqHeads[NUM_TERMINALS];
 
 // convenient functions
-void AddTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
+void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
+void processOutstandingWriteRequests(int tty_id);
 
 #endif

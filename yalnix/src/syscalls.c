@@ -3,10 +3,9 @@
 #include <load_info.h>
 #include <process.h>
 #include <pagetable.h>
-#include <unistd.h>
-#include <yalnix.h>
-#include <yalnixutils.h>
 #include <process.h>
+#include <terminal.h>
+#include <unistd.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
 
@@ -644,13 +643,9 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 // TTYWrite writes to the terminal tty_id
 int kernelTtyWrite(int tty_id, void *buf, int len)
 {
-	// Move the calling process to the gIOBlocked list
-	// Check for clean data in buf
-	// If len is greater than TERMINAL_MAX_LINE
-		// Trap to the hardware and call interruptTtyTransmit() as many times as needed to clear all the input
-	// Else
-		// Trap to the hardware and call interruptTtyTransmit() just once
-    // Move the calling process from the gIOBlocked list to the gReadyToRun list
+    // Add a request to the terminal queue
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    addTerminalRequest(currpcb, TERM_REQ_WRITE, tty_id, buf, len);
 }
 
 int kernelPipeInit(int *pipe_idp)
