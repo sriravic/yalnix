@@ -1,10 +1,10 @@
 #include <terminal.h>
 
-void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
+void addTerminalWriteRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
 {
     if(tty_id < NUM_TERMINALS)
     {
-        TerminalRequest* head = &gTermReqHeads[tty_id];
+        TerminalRequest* head = &gTermWReqHeads[tty_id];
 
         // find the first empty slot
         TerminalRequest* curr = head;
@@ -22,10 +22,10 @@ void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int 
             curr->m_next = req;
             req->m_code = code;
             req->m_pcb = pcb;
-            req->m_buffer = (void*)malloc(sizeof(char) * len);
-            if(req->m_buffer != NULL)
+            req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
+            if(req->m_bufferR0 != NULL)
             {
-                memcpy(req->m_buffer, data, sizeof(char) * len);
+                memcpy(req->m_bufferR0, data, sizeof(char) * len);
                 req->m_len = len;
                 req->m_serviced = 0;
                 req->m_remaining = len;
@@ -48,11 +48,52 @@ void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int 
     }
 }
 
+void addTerminalReadRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
+{
+    if(tty_id < NUM_TERMINALS)
+    {
+        TerminalRequest* head = &gTermRReqHeads[tty_id];
+
+        // find the first empty slot
+        TerminalRequest* curr = head;
+        TerminalRequest* next = curr->m_next;
+        while(next != NULL)
+        {
+            curr = next;
+            next = curr->m_next;
+        }
+        // create the new entry for this request
+        TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
+        if(req != NULL)
+        {
+            curr->m_next = req;
+            req->m_code = code;
+            req->m_pcb = pcb;
+            req->m_bufferR1 = data;             // store the location where the data once its received should be stored back
+            if(req->m_bufferR1 != NULL)
+            {
+                req->m_len = len;
+                req->m_serviced = 0;
+                req->m_remaining = len;
+                req->m_next = NULL;
+            }
+            else
+            {
+                TracePrintf(0, "Invalid location provided for read request in R1 region for process : %d\n", pcb->m_pid);
+            }
+        }
+    }
+    else
+    {
+        TracePrintf(0, "Invalid terminal number provided\n");
+    }
+}
+
 void processOutstandingWriteRequests(int tty_id)
 {
     if(tty_id < NUM_TERMINALS)
     {
-        TerminalRequest* head = &gTermReqHeads[tty_id];
+        TerminalRequest* head = &gTermWReqHeads[tty_id];
         TerminalRequest* toProcess = head->m_next;
         if(toProcess != NULL)
         {
@@ -63,7 +104,7 @@ void processOutstandingWriteRequests(int tty_id)
                 processEnqueue(&gWriteFinishedQ, toProcess->m_pcb);
                 processRemove(&gWriteBlockedQ, toProcess->m_pcb);
                 TerminalRequest* temp = toProcess->m_next;
-                free(toProcess->m_buffer);
+                free(toProcess->m_bufferR0);
                 free(toProcess);
                 toProcess = temp;
             }
@@ -72,7 +113,7 @@ void processOutstandingWriteRequests(int tty_id)
             {
                 int toSend = toProcess->m_remaining;
                 toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
-                TtyTransmit(tty_id, toProcess->m_buffer + (toProcess->m_serviced), toSend);
+                TtyTransmit(tty_id, toProcess->m_bufferR0 + (toProcess->m_serviced), toSend);
 
                 // update the stats
                 toProcess->m_serviced += toSend;
@@ -91,4 +132,32 @@ void processOutstandingWriteRequests(int tty_id)
         TracePrintf(0, "Invalid terminal id supplied for processing outstanding requests\n");
     }
 
+}
+
+void processOutstandingReadRequests(int tty_id)
+{
+    if(tty_id < NUM_TERMINALS)
+    {
+        TerminalRequest* head = &gTermWReqHeads[tty_id];
+        TerminalRequest* toProcess = head->m_next;
+        if(toProcess != NULL)
+        {
+            if(toProcess != NULL)
+            {
+                // allocate maximum memory of TERMINAL_LINE_LENGTH
+                toProcess->m_bufferR0 = (void*)malloc(sizeof(char) * TERMINAL_MAX_LINE);
+                if(toProcess->m_bufferR0 != NULL)
+                {
+                    int dataReceived = TtyReceive(tty_id, toProcess->m_bufferR0, TERMINAL_MAX_LINE);
+                    toProcess->m_len = dataReceived;
+                    toProcess->m_remaining = 0;
+                    toProcess->m_serviced = dataReceived;
+                }
+                else
+                {
+                    TracePrintf(0, "Error allocating memory for reading to R0 memory from terminal\n");
+                }
+            }
+        }
+    }
 }

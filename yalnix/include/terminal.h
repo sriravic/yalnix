@@ -24,7 +24,8 @@ struct TerminalRequest
 {
     TermReqCode m_code;
     PCB* m_pcb;                         // the pcb of the process that initiated this request
-    void* m_buffer;                     // the location in R0 where data is stored as its received or sent
+    void* m_bufferR0;                   // the location in R0 where data is stored as its received or sent
+    void* m_bufferR1;                   // the region1 buffer location - valid only for read requests - we need to store the location where we have to write back data once we receive data from the terminal
     int m_len;                          // the size of the read or write request
     int m_serviced;                     // the amount of data that has been sent or read so far.
     int m_remaining;                    // redundant but convenient check to keep track of how much data is to processed = m_len - m_serviced
@@ -35,11 +36,13 @@ struct TerminalRequest
 typedef struct TerminalRequest TerminalRequest;
 
 // We have NUM_TERMINALS queues of requests
-// Head nodes to the queues
-extern TerminalRequest gTermReqHeads[NUM_TERMINALS];
+// Head nodes to the queues for the write and read requests
+extern TerminalRequest gTermWReqHeads[NUM_TERMINALS];
+extern TerminalRequest gTermRReqHeads[NUM_TERMINALS];
 
 // convenient functions
-void addTerminalRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
+void addTerminalWriteRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
+void addTerminalReadRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
 void processOutstandingWriteRequests(int tty_id);
 
 #endif

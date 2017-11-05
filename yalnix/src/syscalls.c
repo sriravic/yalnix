@@ -637,7 +637,9 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 		// Check for clean data
 	// Move the calling process from the gIOBlocked list to the gReadyToRun list
     //return the number of bytes copied into
-    return -1;
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    addTerminalReadRequest(currpcb, tty_id, TERM_REQ_READ, buf, len);
+    return SUCCESS;
 }
 
 // TTYWrite writes to the terminal tty_id
@@ -645,7 +647,8 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
 {
     // Add a request to the terminal queue
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    addTerminalRequest(currpcb, tty_id, TERM_REQ_WRITE, buf, len);
+    addTerminalWriteRequest(currpcb, tty_id, TERM_REQ_WRITE, buf, len);
+    return SUCCESS;
 }
 
 int kernelPipeInit(int *pipe_idp)

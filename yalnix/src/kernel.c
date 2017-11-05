@@ -52,7 +52,8 @@ void (*gIVT[TRAP_VECTOR_SIZE])(UserContext*);
 int gVMemEnabled = -1;			// global flag to keep track of the enabling of virtual memory
 
 // Terminal Requests header nodes
-TerminalRequest gTermReqHeads[NUM_TERMINALS];
+TerminalRequest gTermWReqHeads[NUM_TERMINALS];
+TerminalRequest gTermRReqHeads[NUM_TERMINALS];
 
 int SetKernelBrk(void* addr)
 {
@@ -341,18 +342,32 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
 	WriteRegister(REG_PTLR1, gNumPagesR0);
 
-	// initialize the terminal heads
+	// initialize the terminal write + read heads heads
 	int term;
 	for(term = 0; term < NUM_TERMINALS; term++)
 	{
-		gTermReqHeads[term].m_code = TERM_REQ_NONE;
-		gTermReqHeads[term].m_pcb = NULL;
-		gTermReqHeads[term].m_buffer = NULL;
-		gTermReqHeads[term].m_len = 0;
-		gTermReqHeads[term].m_serviced = 0;
-		gTermReqHeads[term].m_remaining = 0;
-		gTermReqHeads[term].m_requestInitiated = 0;
-		gTermReqHeads[term].m_next = NULL;
+		gTermWReqHeads[term].m_code = TERM_REQ_NONE;
+		gTermWReqHeads[term].m_pcb = NULL;
+		gTermWReqHeads[term].m_bufferR0 = NULL;
+		gTermWReqHeads[term].m_bufferR1 = NULL;
+		gTermWReqHeads[term].m_len = 0;
+		gTermWReqHeads[term].m_serviced = 0;
+		gTermWReqHeads[term].m_remaining = 0;
+		gTermWReqHeads[term].m_requestInitiated = 0;
+		gTermWReqHeads[term].m_next = NULL;
+	}
+
+	for(term = 0; term < NUM_TERMINALS; term++)
+	{
+		gTermRReqHeads[term].m_code = TERM_REQ_NONE;
+		gTermRReqHeads[term].m_pcb = NULL;
+		gTermRReqHeads[term].m_bufferR0 = NULL;
+		gTermRReqHeads[term].m_bufferR1 = NULL;
+		gTermRReqHeads[term].m_len = 0;
+		gTermRReqHeads[term].m_serviced = 0;
+		gTermRReqHeads[term].m_remaining = 0;
+		gTermRReqHeads[term].m_requestInitiated = 0;
+		gTermRReqHeads[term].m_next = NULL;
 	}
 
 	// enable virtual memory

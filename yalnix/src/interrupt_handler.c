@@ -152,7 +152,6 @@ void interruptKernel(UserContext* ctx)
 
 							// swap out the page tables
 							swapPageTable(nextPCB);
-
 							memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
 							return;
 							}
@@ -163,6 +162,38 @@ void interruptKernel(UserContext* ctx)
             // all others are not implemented syscalls are not implemented.
             	break;
 		case YALNIX_TTY_READ:
+			{
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+				int tty_id = ctx->regs[0];
+				void* buf = (void*)(ctx->regs[1]);
+				int len = ctx->regs[2];
+				kernelTtyRead(tty_id, buf, len);
+
+				// do a context switch
+				PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
+				if(nextpcb != NULL)
+				{
+					int rc = KernelContextSwitch(MyKCS, currpcb, nextpcb);
+					if(rc == -1)
+					{
+						TracePrintf(0, "Context switch failed within tty read\n");
+					}
+					else
+					{
+						processRemove(&gRunningProcessQ, currpcb);
+						processEnqueue(&gReadBlockedQ, currpcb);
+						processEnqueue(&gRunningProcessQ, nextpcb);
+						swapPageTable(nextpcb);
+						memcpy(ctx, nextpcb->m_uctx, sizeof(UserContext));
+						return;
+					}
+				}
+				else
+				{
+					TracePrintf(0, "No free process to run\n");
+				}
+			}
 			break;
 		case YALNIX_TTY_WRITE:
 			// copy the user context
@@ -174,13 +205,13 @@ void interruptKernel(UserContext* ctx)
 				kernelTtyWrite(tty_id, buf, len);
 
 				// initiate the first transfer and wait for hardware to trap
-				if(gTermReqHeads[tty_id].m_requestInitiated == 0)
+				if(gTermWReqHeads[tty_id].m_requestInitiated == 0)
 				{
 					// initiate the handling of a transfer.
 					// the future remaining requests are handled by the trap handler
 					// when the terminal fires up the interrupts.
 					processOutstandingWriteRequests(ctx->regs[0]);
-					gTermReqHeads[tty_id].m_requestInitiated = 1;
+					gTermWReqHeads[tty_id].m_requestInitiated = 1;
 				}
 
 				// Scheduler Logic:
@@ -393,6 +424,8 @@ void interruptTtyReceive(UserContext* ctx)
 	// terminal memory to kernel memory.
 	// move the data from kernel memory into process space of any process waiting on data from the terminal
 	// free up the data from kernel memory.
+	int tty_id = ctx->code;
+	processOutstandingReadRequests(tty_id);
 }
 
 // Interrupt Handler for terminal transmit
