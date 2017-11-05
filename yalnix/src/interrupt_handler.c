@@ -268,8 +268,7 @@ void interruptClock(UserContext* ctx)
 	/* Exit logic?
 	*/
 
-	// check if any process that was in the readfinished or writefinished queue is ready to be moved
-	// into ready to run queue
+	// check if any process that was in the read wait queue and we have data to service it
 	if(gReadFinishedQ.m_head != NULL)
 	{
 		PCB* process = processDequeue(&gReadFinishedQ);
@@ -320,6 +319,17 @@ void interruptClock(UserContext* ctx)
 			swapPageTable(nextPCB);
 
 			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+			if(nextPCB->m_iodata != NULL)
+			{
+				// we have io data ready for this process
+				TerminalRequest* iodata = (TerminalRequest*)nextPCB->m_iodata;
+				memcpy(iodata->m_bufferR1, iodata->m_bufferR0, iodata->m_remaining);
+				ctx->regs[0] = iodata->m_remaining;
+
+				// delete the data that was used for io
+				free(iodata->m_bufferR0);
+				free(iodata);
+			}
 			return;
 		}
 		else if(currPCB->m_kctx == NULL)

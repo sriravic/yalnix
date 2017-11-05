@@ -74,7 +74,7 @@ void addTerminalReadRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, 
             {
                 req->m_len = len;
                 req->m_serviced = 0;
-                req->m_remaining = len;
+                req->m_remaining = 0;
                 req->m_next = NULL;
             }
             else
@@ -142,22 +142,32 @@ void processOutstandingReadRequests(int tty_id)
         TerminalRequest* toProcess = head->m_next;
         if(toProcess != NULL)
         {
-            if(toProcess != NULL)
+            // allocate maximum memory of TERMINAL_LINE_LENGTH
+            toProcess->m_bufferR0 = (void*)malloc(sizeof(char) * TERMINAL_MAX_LINE);
+            if(toProcess->m_bufferR0 != NULL)
             {
-                // allocate maximum memory of TERMINAL_LINE_LENGTH
-                toProcess->m_bufferR0 = (void*)malloc(sizeof(char) * TERMINAL_MAX_LINE);
-                if(toProcess->m_bufferR0 != NULL)
-                {
-                    int dataReceived = TtyReceive(tty_id, toProcess->m_bufferR0, TERMINAL_MAX_LINE);
-                    toProcess->m_len = dataReceived;
-                    toProcess->m_remaining = 0;
-                    toProcess->m_serviced = dataReceived;
-                }
-                else
-                {
-                    TracePrintf(0, "Error allocating memory for reading to R0 memory from terminal\n");
-                }
+                int dataReceived = TtyReceive(tty_id, toProcess->m_bufferR0, TERMINAL_MAX_LINE);
+                toProcess->m_remaining = dataReceived;
+                toProcess->m_serviced = 0;
+
+                // we have received the data
+                // we will send the data to the process that requested data
+                // when we schedule it to run
+                processRemove(&gReadBlockedQ, toProcess->m_pcb);
+                processEnqueue(&gReadFinishedQ, toProcess->m_pcb);
+                toProcess->m_pcb->m_iodata = toProcess;
+                head->m_next = toProcess->m_next;
             }
+            else
+            {
+                TracePrintf(0, "Error allocating memory for reading to R0 memory from terminal\n");
+            }
+        }
+        else
+        {
+            // No process is waiting for input
+            // ignore the data that was received.!!
+            TracePrintf(0, "No user process is waiting for input from the terminal. Ignoring\n");
         }
     }
 }

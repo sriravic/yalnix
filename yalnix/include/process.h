@@ -40,6 +40,7 @@ struct ProcessControlBlock
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
     struct ExitDataQueue* m_edQ;                    // singly linked list of exit data
+    void* m_iodata;                                 // pointer to a datastructure that we use to handle io for processes
 };
 
 typedef struct ProcessControlBlock PCB;

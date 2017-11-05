@@ -451,6 +451,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_next = NULL;
 	pInitPCB->m_prev = NULL;
 	pInitPCB->m_edQ = initEDQ;
+	pInitPCB->m_iodata = NULL;
 
 	// add the pcb to running for now
 	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
@@ -557,6 +558,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_next = NULL;
 	pIdlePCB->m_prev = NULL;
 	pIdlePCB->m_edQ = idleEDQ;
+	pInitPCB->m_iodata = NULL;
 
 	// reset to idle's pagetables for successfulyl loading
 	swapPageTable(pIdlePCB);
