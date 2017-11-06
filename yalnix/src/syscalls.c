@@ -484,19 +484,6 @@ void kernelExit(int status)
         // put the exit data into the parents exit data queue
         exitDataEnqueue(parentPCB->m_edQ, exitData);
     }
-
-    // Move the calling process to the terminated process queue
-    processDequeue(&gRunningProcessQ);
-    //processEnqueue(&gTerminatedProcessQ, currPCB);
-
-	// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
-    freeRegionOneFrames(currPCB);
-    freeKernelStackFrames(currPCB);
-    exitDataFree(currPCB->m_edQ);     // free exit data queue
-    free(currPCB->m_uctx);
-    free(currPCB->m_kctx);
-    free(currPCB->m_pt);
-    free(currPCB);
 }
 
 // Wait

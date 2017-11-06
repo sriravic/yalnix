@@ -565,7 +565,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	swapPageTable(pIdlePCB);
 
-	char idleprog[] = "testterminal";
+	char idleprog[] = "testmath";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 

@@ -30,11 +30,11 @@ KERNEL_INCS =
 
 
 #List all user programs here.
-USER_APPS = idle init testfork testexec helloworld testterminal
+USER_APPS = idle init testfork testexec helloworld testterminal testmath
 #List all user program source files here.  SHould be the same as the previous list, with ".c" added to each file
-USER_SRCS = idle.c init.c testfork.c testexec.c helloworld.c testterminal.c
+USER_SRCS = idle.c init.c testfork.c testexec.c helloworld.c testterminal.c testmath.c
 #List the objects to be formed form the user  source files here.  Should be the same as the prvious list, replacing ".c" with ".o"
-USER_OBJS = idle.o init.o testfork.o testexec.o helloworld.o testterminal.o
+USER_OBJS = idle.o init.o testfork.o testexec.o helloworld.o testterminal.o testmath.o
 #List all of the header files necessary for your user programs
 USER_INCS =
 

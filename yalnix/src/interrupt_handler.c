@@ -82,8 +82,46 @@ void interruptKernel(UserContext* ctx)
 			break;
 		case YALNIX_EXIT:
 			{
-				int status = 42;	// figure out how to get the real status
+				TracePrintf(2, "Process exited\n");
+				int status = ctx->code;	// figure out how to get the real status
 				kernelExit(status);
+
+				// exit happened, so we context switch
+				TracePrintf(2, "Process exited\n");
+				// do a context switch here
+				// Remove the process from the running queue
+				PCB* currPCB = processDequeue(&gRunningProcessQ);
+				PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
+				//currpcb->m_ticks = 0;
+				nextPCB->m_ticks = 0;
+				if(nextPCB != NULL)
+				{
+					int rc = KernelContextSwitch(MyKCS, nextPCB, currPCB);
+					if(rc == -1)
+					{
+						TracePrintf(0, "Context switch failed");
+					}
+
+					//processRemove(&gRunningProcessQ, currpcb);
+					//processEnqueue(&gWriteBlockedQ, currpcb);
+					processEnqueue(&gRunningProcessQ, nextPCB);
+					swapPageTable(nextPCB);
+					memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+					return;
+				}
+				else
+				{
+					TracePrintf(0, "Error: No process to run.!!\n");
+				}
+
+				// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
+			    freeRegionOneFrames(currPCB);
+			    freeKernelStackFrames(currPCB);
+			    exitDataFree(currPCB->m_edQ);     // free exit data queue
+			    free(currPCB->m_uctx);
+			    free(currPCB->m_kctx);
+			    free(currPCB->m_pt);
+			    free(currPCB);
 			}
 			break;
         case YALNIX_WAIT:
@@ -95,12 +133,13 @@ void interruptKernel(UserContext* ctx)
 				{
 					// waiting happened, so we context switch
 					TracePrintf(2, "Process waiting for a child to exit\n");
-					//processEnqueue(&gRunningProcessQ, processDequeue(&gWaitProcessQ));
+					// TODO wait context switch
 				}
 				else
 				{
 					TracePrintf(2, "Process %d exited w/ status %d so I don't have to wait.\n", child_pid, status);
 				}
+				ctx->regs[0] = (u_long)child_pid;
             }
         	break;
         case YALNIX_BRK:
@@ -435,7 +474,46 @@ void interruptMemory(UserContext* ctx)
 void interruptMath(UserContext* ctx)
 {
 	// check the status of the register for what caused this math traps
-	// report to user and determine further course of action
+	// report to user and abort the process
+	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+	TracePrintf(2, "Error: illegal math operation. Killing process %d.\n", currPCB->m_pid);
+	kernelExit(ctx->code);
+
+	// exit happened, so we context switch
+	// do a context switch here
+	// Remove the process from the running queue
+	currPCB = processDequeue(&gRunningProcessQ);
+	PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
+	//currpcb->m_ticks = 0;
+	nextPCB->m_ticks = 0;
+	if(nextPCB != NULL)
+	{
+		int rc = KernelContextSwitch(MyKCS, nextPCB, currPCB);
+		if(rc == -1)
+		{
+			TracePrintf(0, "Context switch failed");
+		}
+
+		//processRemove(&gRunningProcessQ, currpcb);
+		//processEnqueue(&gWriteBlockedQ, currpcb);
+		processEnqueue(&gRunningProcessQ, nextPCB);
+		swapPageTable(nextPCB);
+		memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+		return;
+	}
+	else
+	{
+		TracePrintf(0, "Error: No process to run.!!\n");
+	}
+
+	// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
+	freeRegionOneFrames(currPCB);
+	freeKernelStackFrames(currPCB);
+	exitDataFree(currPCB->m_edQ);     // free exit data queue
+	free(currPCB->m_uctx);
+	free(currPCB->m_kctx);
+	free(currPCB->m_pt);
+	free(currPCB);
 }
 
 // Interrupt Handler for terminal recieve
