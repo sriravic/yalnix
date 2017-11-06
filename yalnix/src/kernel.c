@@ -146,7 +146,9 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 		memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
 
 		// return 'to-be-run' context
-		return currPCB->m_kctx;
+		//if(nextPCB->m_kctx == NULL)
+			return currPCB->m_kctx;
+		//else return nextPCB->m_kctx;
 	}
 	else
 	{
@@ -423,7 +425,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	UserContext* pInitUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pInitUC == NULL)
 	{
-		TracePrintf(0, "Unable to create user context for idle process");
+		TracePrintf(0, "Unable to create user context for init process");
 		exit(-1);
 	}
 	else
@@ -548,7 +550,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// set the entries in the corresponding PCB
 	pIdlePCB->m_pid = gPID++;
-	pIdlePCB->m_ppid = pIdlePCB->m_pid;		// for now this is its own parent
+	pIdlePCB->m_ppid = pInitPCB->m_pid;		// for now this is its own parent
 	pIdlePCB->m_pt = pIdlePT;
 	pIdlePCB->m_uctx = pIdleUC;
 	pIdlePCB->m_kctx = NULL;

@@ -165,6 +165,13 @@ void interruptKernel(UserContext* ctx)
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+
+				if(currpcb->m_kctx == NULL)
+				{
+					// do a dummy context switch to get the current kernel context
+					KernelContextSwitch(MyKCS, currpcb, NULL);
+				}
+
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
@@ -172,6 +179,8 @@ void interruptKernel(UserContext* ctx)
 
 				// do a context switch
 				PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
+				currpcb->m_ticks = 0;
+				nextpcb->m_ticks = 0;
 				if(nextpcb != NULL)
 				{
 					int rc = KernelContextSwitch(MyKCS, currpcb, nextpcb);
@@ -196,9 +205,16 @@ void interruptKernel(UserContext* ctx)
 			}
 			break;
 		case YALNIX_TTY_WRITE:
-			// copy the user context
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+
+				if(currpcb->m_kctx == NULL)
+				{
+					// do a dummy context switch to get the current kernel context
+					KernelContextSwitch(MyKCS, currpcb, NULL);
+				}
+
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
@@ -214,19 +230,24 @@ void interruptKernel(UserContext* ctx)
 					gTermWReqHeads[tty_id].m_requestInitiated = 1;
 				}
 
-				// Scheduler Logic:
-				// remove the process from the running queue
-				processRemove(&gRunningProcessQ, currpcb);
-
-				// add the process to the blocked queues
-				processEnqueue(&gWriteBlockedQ, currpcb);
-
-				// find a new process to run in this processes place.
-				PCB* nextprocess = processDequeue(&gReadyToRunProcessQ);
-				if(nextprocess != NULL)
+				// do a context switch here
+				PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
+				currpcb->m_ticks = 0;
+				nextpcb->m_ticks = 0;
+				if(nextpcb != NULL)
 				{
-					processEnqueue(&gRunningProcessQ, nextprocess);
-					memcpy(ctx, nextprocess->m_uctx, sizeof(UserContext));
+					int rc = KernelContextSwitch(MyKCS, nextpcb, currpcb);
+					if(rc == -1)
+					{
+						TracePrintf(0, "Context switch failed");
+					}
+
+					processRemove(&gRunningProcessQ, currpcb);
+					processEnqueue(&gWriteBlockedQ, currpcb);
+					processEnqueue(&gRunningProcessQ, nextpcb);
+					swapPageTable(nextpcb);
+					memcpy(ctx, nextpcb->m_uctx, sizeof(UserContext));
+					return;
 				}
 				else
 				{
@@ -291,7 +312,7 @@ void interruptClock(UserContext* ctx)
 
 	// if this process has run for too long
 	// say 3 ticks, then swap it with a different process in the ready to run queue
-	if(currPCB->m_ticks > 2)
+	if(currPCB->m_ticks > 1)
 	{
 		// schedule logic
 		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
