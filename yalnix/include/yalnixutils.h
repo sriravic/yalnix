@@ -17,6 +17,12 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
 // finds the node for framenum and removes it from the used pool and moves it to the free frames
 void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigned int frameNum);
 
+// frees all region one frames associated with the given pcb
+void freeRegionOneFrames(PCB* pcb);
+
+// Free the two kernel stack frames associated with the pcb
+void freeKernelStackFrames(PCB* pcb);
+
 // swaps the page table to the PCB passed in
 void swapPageTable(PCB* process);
 

@@ -108,5 +108,6 @@ extern EDQueue gExitDataQ;
 // Function headers for the exit data queue
 ExitData* exitDataDequeue(EDQueue* Q);
 void exitDataEnqueue(EDQueue* Q, ExitData* exitData);
+void exitDataFree(EDQueue* Q);
 
 #endif

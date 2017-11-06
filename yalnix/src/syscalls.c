@@ -299,15 +299,7 @@ int kernelExec(char *name, char **args)
 
          // invalidate all the pages for region 1
          // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
-         int region;
-         for(region = NUM_VPN >> 1; region < NUM_VPN; region++)
-         {
-             if(pt->m_pte[region].valid == 1)
-             {
-                 freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].pfn);
-                 pt->m_pte[region].valid = 0;
-             }
-         }
+         freeRegionOneFrames(currpcb);
 
          // Allocate "li.t_npg" physical pages and map them starting at
          // the "text_pg1" page in region 1 address space.
@@ -493,12 +485,18 @@ void kernelExit(int status)
         exitDataEnqueue(parentPCB->m_edQ, exitData);
     }
 
-	// Free all the memory associated with the process
-    // TODO free memory
-
     // Move the calling process to the terminated process queue
     processDequeue(&gRunningProcessQ);
-    processEnqueue(&gTerminatedProcessQ, currPCB);
+    //processEnqueue(&gTerminatedProcessQ, currPCB);
+
+	// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
+    freeRegionOneFrames(currPCB);
+    freeKernelStackFrames(currPCB);
+    exitDataFree(currPCB->m_edQ);     // free exit data queue
+    free(currPCB->m_uctx);
+    free(currPCB->m_kctx);
+    free(currPCB->m_pt);
+    free(currPCB);
 }
 
 // Wait

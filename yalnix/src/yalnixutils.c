@@ -60,6 +60,41 @@ void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigne
     availPrev->m_next = curr;
 }
 
+void freeRegionOneFrames(PCB* pcb)
+{
+    PageTable* pt = pcb->m_pt;
+    int pageNumber;
+
+    // invalidate all the pages for region 1
+    // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
+    for(pageNumber = NUM_VPN >> 1; pageNumber < NUM_VPN; pageNumber++)
+    {
+        if(pt->m_pte[pageNumber].valid == 1)
+        {
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[pageNumber].pfn);
+            pt->m_pte[pageNumber].valid = 0;
+        }
+    }
+}
+
+void freeKernelStackFrames(PCB* pcb)
+{
+    int pageNumber;
+    int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
+    int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
+    PageTable* pt = pcb->m_pt;
+
+    for(pageNumber = r0kernelPages; pageNumber < r0StackPages; pageNumber++)
+    {
+        if(pt->m_pte[pageNumber].valid == 1)
+        {
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[pageNumber].pfn);
+            pt->m_pte[pageNumber].valid = 0;
+        }
+    }
+}
+
+
 void swapPageTable(PCB* process){
     WriteRegister(REG_PTBR0, (unsigned int)process->m_pt->m_pte);
     WriteRegister(REG_PTLR0, (NUM_VPN >> 1));

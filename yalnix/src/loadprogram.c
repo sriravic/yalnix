@@ -152,6 +152,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     * program into memory.  Get the right number of physical pages
     * allocated, and set them all to writable.
     */
+    PageTable* pt = pcb->m_pt;
 
     //Throw away the old region 1 virtual address space of the
     // curent process by freeing
@@ -165,20 +166,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // deallocate a few pages to fit the size of memory to the requirements
     // of the new process.
 
-    PageTable* pt = pcb->m_pt;
-    int region;
-
-    // invalidate all the pages for region 1
-    // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
-    for(region = NUM_VPN >> 1; region < NUM_VPN; region++)
-    {
-        if(pt->m_pte[region].valid == 1)
-        {
-            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[region].pfn);
-            pt->m_pte[region].valid = 0;
-        }
-
-    }
+    freeRegionOneFrames(pcb);
 
     // Allocate "li.t_npg" physical pages and map them starting at
     // the "text_pg1" page in region 1 address space.

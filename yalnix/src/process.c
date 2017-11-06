@@ -217,3 +217,15 @@ void exitDataEnqueue(EDQueue* Q, ExitData* exitData)
     }
     Q->m_size++;
 }
+
+void exitDataFree(EDQueue* Q)
+{
+    ExitData* curr = Q->m_head;
+    ExitData* next;
+    while(curr != NULL)
+    {
+        next = curr->m_next;
+        free(curr);
+        curr = next;
+    }
+}
