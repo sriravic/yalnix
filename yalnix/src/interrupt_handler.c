@@ -92,7 +92,7 @@ void interruptKernel(UserContext* ctx)
 				// Remove the process from the running queue
 				PCB* currPCB = processDequeue(&gRunningProcessQ);
 				PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
-				//currpcb->m_ticks = 0;
+
 				nextPCB->m_ticks = 0;
 				if(nextPCB != NULL)
 				{
@@ -102,8 +102,6 @@ void interruptKernel(UserContext* ctx)
 						TracePrintf(0, "Context switch failed");
 					}
 
-					//processRemove(&gRunningProcessQ, currpcb);
-					//processEnqueue(&gWriteBlockedQ, currpcb);
 					processEnqueue(&gRunningProcessQ, nextPCB);
 					swapPageTable(nextPCB);
 					memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
@@ -114,14 +112,8 @@ void interruptKernel(UserContext* ctx)
 					TracePrintf(0, "Error: No process to run.!!\n");
 				}
 
-				// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
-			    freeRegionOneFrames(currPCB);
-			    freeKernelStackFrames(currPCB);
-			    exitDataFree(currPCB->m_edQ);     // free exit data queue
-			    free(currPCB->m_uctx);
-			    free(currPCB->m_kctx);
-			    free(currPCB->m_pt);
-			    free(currPCB);
+				// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 stack pages
+				freePCB(currPCB);
 			}
 			break;
         case YALNIX_WAIT:

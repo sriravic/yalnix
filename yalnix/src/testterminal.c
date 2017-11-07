@@ -38,9 +38,9 @@ void testRead()
 
 int main(int argc, char** argv)
 {
-    testRead();
     while(1)
     {
+        testRead();
         TracePrintf(0, "TestTerminal Program.!\n");
         Pause();
     }
