@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
+#include <synchronization.h>
 
 // the global process id counter
 extern int gPID;
@@ -663,22 +664,68 @@ int kernelPipeWrite(int pipe_id, void *buf, int len)
 int kernelLockInit(int *lock_idp)
 {
 	// Create a new lock with a unique id, owned by the calling process, and initially unlocked
-	// Add the new lock to gLockQueue
+    // Add the new lock to gLockQueue
     // Save its unique id into lock_idp
-    return -1;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    //int owningPid = currPCB->m_pid;
+
+    *lock_idp = createLock(currPCB->m_pid);
+    if(*lock_idp == -1)
+    {
+        return ERROR;
+    }
+    else
+    {
+        return SUCCESS;
+    }
 }
 
 int kernelAcquire(int lock_id)
 {
-	// if the lock is free, update the lock's holder
-    // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
-    return -1;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+
+    LockQueueNode* lockNode = getLockNode(lock_id);
+    Lock* lock = lockNode->m_pLock;
+    if(lock->m_state == UNLOCKED)
+    {
+        // if the lock is free, update the lock's holder
+        lock->m_owner = currPCB->m_pid;
+        lock->m_state = LOCKED;
+        return SUCCESS;
+    }
+    else
+    {
+        // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
+        processDequeue(&gRunningProcessQ);
+        lockWaitingEnqueue(lockNode, currPCB);
+        return ERROR;
+    }
 }
 
 int kernelRelease(int lock_id) {
-	// If the caller doesn't own the lock, return an error
-    // Otherwise unlock the lock and give it to the next waiting process if there is one
-    return -1;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+
+    LockQueueNode* lockNode = getLockNode(lock_id);
+    Lock* lock = lockNode->m_pLock;
+    if(lock->m_owner != currPCB->m_pid)
+    {
+        // If the caller doesn't own the lock, return an error
+        return ERROR;
+    }
+    else
+    {
+        // Otherwise unlock the lock and give it to the next waiting process if there is one
+        lock->m_state = UNLOCKED;
+        lock->m_owner = -1;
+        PCB* newLockOwner = lockWaitingDequeue(lockNode);
+        if(newLockOwner != NULL)
+        {
+            lock->m_owner = newLockOwner->m_pid;
+            lock->m_state = LOCKED;
+            processEnqueue(&gReadyToRunProcessQ, newLockOwner);
+        }
+        return SUCCESS;
+    }
 }
 
 int kernelCvarInit(int *cvar_idp) {

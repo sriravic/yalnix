@@ -22,9 +22,9 @@ ALL = $(KERNEL_ALL) $(USER_APPS)
 KERNEL_ALL = yalnix
 
 #List all kernel source files here.
-KERNEL_SRCS = kernel.c interrupt_handler.c syscalls.c loadprogram.c yalnixutils.c process.c scheduler.c terminal.c
+KERNEL_SRCS = kernel.c interrupt_handler.c syscalls.c loadprogram.c yalnixutils.c process.c scheduler.c terminal.c synchronization.c
 #List the objects to be formed form the kernel source files here.  Should be the same as the prvious list, replacing ".c" with ".o"
-KERNEL_OBJS = kernel.o interrupt_handler.o syscalls.o loadprogram.o yalnixutils.o process.o scheduler.o terminal.o
+KERNEL_OBJS = kernel.o interrupt_handler.o syscalls.o loadprogram.o yalnixutils.o process.o scheduler.o terminal.o synchronization.o
 #List all of the header files necessary for your kernel
 KERNEL_INCS =
 

@@ -18,14 +18,19 @@ Description: Contains the synchronization primitives provided by yalnix to the u
 #define LOCKED 1
 #define UNLOCKED 0
 
+#include "process.h"
+
+extern int gPID;            // the global unique id counter that can be given to new locks/cvars/pipes
+
 // A lock is a mutex that is provided to enable basic synchronization among processes.
 struct Lock
 {
-	uint32_t m_id;			// the unique identified for the lock
-	uint32_t m_owner;		// the owner process of a lock
+	int m_id;			// the unique identified for the lock
+	int m_owner;		// the owner process of a lock
 	int		 m_state;		// the state of the lock - can be locked/unlocked
 };
-
+typedef struct Lock Lock;
+/*
 // A condition variable is another synchronization primitive to be used for communication purposes.
 struct CVar
 {
@@ -38,7 +43,7 @@ struct Pipe
 	uint32_t m_id;			// the unique identifier for a pipe
 	uint32_t m_owner;		// the owner of a pipe
 };
-
+*/
 // Since the synchronization primitives are all facilities provided by the kernel to
 // userland processes, we are completely free to control the global list of all locks, cvars, pipes
 // that are opened and closed in a sequential but safe manner
@@ -48,18 +53,37 @@ struct Pipe
 // We control this by having a linked list of all processes waiting on a particular lock
 struct LockQueue
 {
-	uint32_t m_processID;				// list of active processes waiting on this lock
+	struct LockQueueNode* m_head;
+    struct LockQueueNode* m_tail;
+};
+typedef struct LockQueue LockQueue;
+
+// list of active processes waiting on this lock
+struct LockWaitingQueue
+{
+    //uint32_t m_processID;
+    PCB* m_waitingProcess;
 	struct LockQueue* m_next;			// a pointer to the next entry of waiting processes to get a hold of the lock
+    // PCB* ???
 };
 
 struct LockQueueNode
 {
 	struct Lock* m_pLock;				// a pointer to the lock that is under consideration
-	uint32_t m_currentLockHolder;		// id of the current process that is actually owning the lock
-	struct LockQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
+	//uint32_t m_currentLockHolder;		// id of the current process that is actually owning the lock
+	struct LockWaitingQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
 	struct LockQueueNode* m_pNext;		// a pointer to the next lock that is being used within the OS
 };
+typedef struct LockQueueNode LockQueueNode;
 
+// Lock functions
+void lockWaitingEnqueue(LockQueueNode* lockNode, PCB* pcb);
+PCB* lockWaitingDequeue(LockQueueNode* lockNode);
+LockQueueNode* getLockNode(int lockId);
+int createLock(int pid);
+int deleteLock(); // to be implemented when we write kernelReclaim
+
+/*
 // Condition variables
 struct CVarQueue
 {
@@ -95,12 +119,12 @@ struct ReadPipeQueue
 	struct ReadPipeQueue* m_next;		// a pointer to the next entry in the pipe queue that is a read pipe process
 	int m_status;						// the status of the particular pipe
 };
-
+*/
 
 // Globally defined pipes
 struct LockQueueNode* gLockQueue;			// the global lock queue
-struct CVarQueueNode* gCVarQueue;			// the global cvar queue
-struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
-struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue
+// struct CVarQueueNode* gCVarQueue;			// the global cvar queue
+// struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
+// struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue
 
 #endif

@@ -147,7 +147,7 @@ KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 
 		// return 'to-be-run' context
 		//if(nextPCB->m_kctx == NULL)
-			return currPCB->m_kctx;
+		return currPCB->m_kctx;
 		//else return nextPCB->m_kctx;
 	}
 	else
