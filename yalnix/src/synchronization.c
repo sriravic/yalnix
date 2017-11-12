@@ -90,3 +90,39 @@ int createLock(int pid)
 int deleteLock(){
     return -1;
 }
+
+// Utility functions
+int getUniqueSyncId(SyncType t)
+{
+    int nextId = gSID++;
+    if(t == SYNC_LOCK)
+        return (nextId | 0x10000000);
+    else if(t == SYNC_PIPE)
+        return (nextId | 0x20000000);
+    else if(t == SYNC_CVAR)
+        return (nextId | 0x30000000);
+    else
+    {
+        TracePrintf(0, "INVALID SyncType passed.!!");
+        return 0xFFFFFFFF;
+    }
+}
+
+SyncType getSyncType(int compoundId)
+{
+    int type = (compoundId & 0x30000000) >> SYNC_SHIFT;
+    if(type == 1) return SYNC_LOCK;
+    else if(type == 2) return SYNC_PIPE;
+    else if(type == 3) return SYNC_CVAR;
+    else
+    {
+        TracePrintf(0, "ERROR: Invalid Sync Type\n");
+        return SYNC_UNDEFINED;
+    }
+}
+
+// strips the sync type mask.
+int getSyncIdOnly(int compoundId)
+{
+    return (compoundId & 0x0FFFFFFF);
+}

@@ -20,7 +20,30 @@ Description: Contains the synchronization primitives provided by yalnix to the u
 
 #include "process.h"
 
+enum SYNC_TYPE
+{
+	SYNC_LOCK,
+	SYNC_PIPE,
+	SYNC_CVAR,
+	SYNC_UNDEFINED
+};
+
+typedef enum SYNC_TYPE SyncType;
+
 extern int gSID;            // the global unique id counter that can be given to new locks/cvars/pipes
+
+// utility functions to handle the 3 different types of synchronization primitives
+
+// This method should be used to get unique ids for creation of any synchronization primivites
+// rather than handling the gSID variable directly. This function increments, adds mask and provides the
+// compound entity.
+int getUniqueSyncId(SyncType t);
+
+// This function, when passed with a compound ID, returns the correct type of synchronization primivite
+SyncType getSyncType(int compoundId);
+
+// THis function strips the compound id from its type and returns just the id
+int getSyncIdOnly(int compoundId);
 
 // A lock is a mutex that is provided to enable basic synchronization among processes.
 struct Lock
