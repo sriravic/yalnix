@@ -49,6 +49,8 @@ PCBQueue gWriteFinishedQ;
 
 // The global synchronization queues
 LockQueue gLockQueue;
+PipeQueue gPipeQueue;
+PipeReadWaitQueue gPipeReadWaitQueue;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -345,6 +347,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// create initial synchronization queues
 	INIT_QUEUE_HEADS(gLockQueue);
+	INIT_QUEUE_HEADS(gPipeQueue);
+	INIT_QUEUE_HEADS(gPipeReadWaitQueue);
 
 	// Set the page table entries for the kernel in the correct register before enabling VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
@@ -573,7 +577,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	swapPageTable(pIdlePCB);
 
-	char idleprog[] = "testlock";
+	char idleprog[] = "testpipe";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 
