@@ -20,14 +20,14 @@ Description: Contains the synchronization primitives provided by yalnix to the u
 
 #include "process.h"
 
-extern int gPID;            // the global unique id counter that can be given to new locks/cvars/pipes
+extern int gSID;            // the global unique id counter that can be given to new locks/cvars/pipes
 
 // A lock is a mutex that is provided to enable basic synchronization among processes.
 struct Lock
 {
 	int m_id;			// the unique identified for the lock
 	int m_owner;		// the owner process of a lock
-	int		 m_state;		// the state of the lock - can be locked/unlocked
+	int m_state;		// the state of the lock - can be locked/unlocked
 };
 typedef struct Lock Lock;
 /*
@@ -59,24 +59,25 @@ struct LockQueue
 typedef struct LockQueue LockQueue;
 
 // list of active processes waiting on this lock
-struct LockWaitingQueue
-{
-    //uint32_t m_processID;
-    PCB* m_waitingProcess;
-	struct LockQueue* m_next;			// a pointer to the next entry of waiting processes to get a hold of the lock
-    // PCB* ???
-};
+// struct LockWaitingQueue
+// {
+//     //uint32_t m_processID;
+//     PCB* m_waitingProcess;
+// 	struct LockWaitingQueue* m_next;			// a pointer to the next entry of waiting processes to get a hold of the lock
+//     // PCB* ???
+// };
 
 struct LockQueueNode
 {
 	struct Lock* m_pLock;				// a pointer to the lock that is under consideration
 	//uint32_t m_currentLockHolder;		// id of the current process that is actually owning the lock
-	struct LockWaitingQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
+	PCBQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
 	struct LockQueueNode* m_pNext;		// a pointer to the next lock that is being used within the OS
 };
 typedef struct LockQueueNode LockQueueNode;
 
 // Lock functions
+void lockEnqueue(LockQueueNode* lockQueueNode);
 void lockWaitingEnqueue(LockQueueNode* lockNode, PCB* pcb);
 PCB* lockWaitingDequeue(LockQueueNode* lockNode);
 LockQueueNode* getLockNode(int lockId);
@@ -122,7 +123,7 @@ struct ReadPipeQueue
 */
 
 // Globally defined pipes
-struct LockQueueNode* gLockQueue;			// the global lock queue
+struct LockQueue* gLockQueue;			// the global lock queue
 // struct CVarQueueNode* gCVarQueue;			// the global cvar queue
 // struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
 // struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue

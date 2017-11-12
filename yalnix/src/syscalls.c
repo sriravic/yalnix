@@ -3,7 +3,6 @@
 #include <load_info.h>
 #include <process.h>
 #include <pagetable.h>
-#include <process.h>
 #include <terminal.h>
 #include <unistd.h>
 #include <yalnix.h>
@@ -661,23 +660,19 @@ int kernelPipeWrite(int pipe_id, void *buf, int len)
     return -1;
 }
 
+// Create a new lock with a unique id, owned by the calling process, and initially unlocked
+// Add the new lock to gLockQueue
+// Save its unique id into lock_idp
 int kernelLockInit(int *lock_idp)
 {
-	// Create a new lock with a unique id, owned by the calling process, and initially unlocked
-    // Add the new lock to gLockQueue
-    // Save its unique id into lock_idp
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-    //int owningPid = currPCB->m_pid;
 
     *lock_idp = createLock(currPCB->m_pid);
     if(*lock_idp == -1)
     {
         return ERROR;
     }
-    else
-    {
-        return SUCCESS;
-    }
+    return SUCCESS;
 }
 
 int kernelAcquire(int lock_id)
@@ -685,6 +680,11 @@ int kernelAcquire(int lock_id)
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 
     LockQueueNode* lockNode = getLockNode(lock_id);
+    if(lockNode == NULL)
+    {
+        return ERROR;
+    }
+
     Lock* lock = lockNode->m_pLock;
     if(lock->m_state == UNLOCKED)
     {
