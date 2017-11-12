@@ -53,14 +53,16 @@ struct Lock
 	int m_state;		// the state of the lock - can be locked/unlocked
 };
 typedef struct Lock Lock;
-/*
+
 // A condition variable is another synchronization primitive to be used for communication purposes.
 struct CVar
 {
-	uint32_t m_id;			// the unique identifier for a condition variable.
-	uint32_t m_owner;		// the owner process id of a condition variable
+	int m_id;			// the unique identifier for a condition variable.
+	int m_owner;		// the owner process id of a condition variable
+    int m_lockId;		// the lock id associated with the condition variable
 };
-
+typedef struct CVar CVar;
+/*
 struct Pipe
 {
 	uint32_t m_id;			// the unique identifier for a pipe
@@ -81,19 +83,9 @@ struct LockQueue
 };
 typedef struct LockQueue LockQueue;
 
-// list of active processes waiting on this lock
-// struct LockWaitingQueue
-// {
-//     //uint32_t m_processID;
-//     PCB* m_waitingProcess;
-// 	struct LockWaitingQueue* m_next;			// a pointer to the next entry of waiting processes to get a hold of the lock
-//     // PCB* ???
-// };
-
 struct LockQueueNode
 {
 	struct Lock* m_pLock;				// a pointer to the lock that is under consideration
-	//uint32_t m_currentLockHolder;		// id of the current process that is actually owning the lock
 	PCBQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
 	struct LockQueueNode* m_pNext;		// a pointer to the next lock that is being used within the OS
 };
@@ -107,23 +99,33 @@ LockQueueNode* getLockNode(int lockId);
 int createLock(int pid);
 int deleteLock(); // to be implemented when we write kernelReclaim
 
-/*
+
 // Condition variables
 struct CVarQueue
 {
-	uint32_t m_waitingProcesses;		// many processes can wait on the condition variable and we store this as a linked list
-	struct CVarQueue* m_next;			// the next entry in the linked list
+	struct CVarQueueNode* m_head;			// the next entry in the linked list
+    struct CVarQueueNode* m_tail;
 };
+typedef struct CVarQueue CVarQueue;
 
 struct CVarQueueNode
 {
 	struct CVar* m_pCVar;				// pointer to the condition variable under consideration
-	uint32_t m_currentCVHolder;			// the current holder of the condition variable
-	uint32_t m_lockID;					// the lock id associated with the condition variable
-	struct CVarQueue* m_waitingQueue;	// the list of processes waiting on this condition variable to be satisfied
-	struct CVarQueueNode* m_next;		// a pointer to the next condition variable used within the system.
+	PCBQueue* m_waitingQueue;	        // the list of processes waiting on this condition variable to be satisfied
+	struct CVarQueueNode* m_pNext;		// a pointer to the next condition variable used within the system.
 };
+typedef struct CVarQueueNode CVarQueueNode;
 
+// CVar functions
+void cvarEnqueue(CVarQueueNode* cvarQueueNode);
+void cvarWaitingEnqueue(CVarQueueNode* cvarQueueNode, PCB* pcb);
+PCB* cvarWaitingDequeue(CVarQueueNode* cvarQueueNode);
+CVarQueueNode* getCVarQueueNode(int cvarId);
+int createCVar(int pid);
+int deleteCVar(); // to be implemented when we write kernelReclaim
+
+
+/*
 // Pipe handling code
 // We have two global queues for pipes. One for all the pipes that have writing processes to them
 // and other queues for processes reading from pipes. For now we assume that one process can read and one process can
@@ -147,7 +149,7 @@ struct ReadPipeQueue
 
 // Globally defined pipes
 extern LockQueue gLockQueue;			// the global lock queue
-// struct CVarQueueNode* gCVarQueue;			// the global cvar queue
+extern CVarQueue gCVarQueue;			// the global cvar queue
 // struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
 // struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue
 

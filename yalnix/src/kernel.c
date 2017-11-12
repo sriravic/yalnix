@@ -49,6 +49,7 @@ PCBQueue gWriteFinishedQ;
 
 // The global synchronization queues
 LockQueue gLockQueue;
+CVarQueue gCVarQueue;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -345,6 +346,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// create initial synchronization queues
 	INIT_QUEUE_HEADS(gLockQueue);
+	INIT_QUEUE_HEADS(gCVarQueue);
 
 	// Set the page table entries for the kernel in the correct register before enabling VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);

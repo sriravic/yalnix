@@ -691,15 +691,14 @@ int kernelAcquire(int lock_id)
         // if the lock is free, update the lock's holder
         lock->m_owner = currPCB->m_pid;
         lock->m_state = LOCKED;
-        return SUCCESS;
     }
     else
     {
         // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
         processDequeue(&gRunningProcessQ);
         lockWaitingEnqueue(lockNode, currPCB);
-        return ERROR;
     }
+    return SUCCESS;
 }
 
 int kernelRelease(int lock_id) {
@@ -710,7 +709,7 @@ int kernelRelease(int lock_id) {
     {
         return ERROR;
     }
-    
+
     Lock* lock = lockNode->m_pLock;
     if(lock->m_owner != currPCB->m_pid)
     {
@@ -737,7 +736,13 @@ int kernelCvarInit(int *cvar_idp) {
 	// Create a new cvar with a unique id, owned by the calling process
 	// Add the cvar to the gCVarQueue list
     // Save the unique id into cvar_idp
-    return -1;
+    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    *cvar_idp = createCVar(currPCB->m_pid);
+    if(*cvar_idp == ERROR)
+    {
+        return ERROR;
+    }
+    return SUCCESS;
 }
 
 int kernelCvarSignal(int cvar_id) {

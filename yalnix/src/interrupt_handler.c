@@ -320,6 +320,31 @@ void interruptKernel(UserContext* ctx)
 				ctx->regs[0] = kernelRelease(lock_id);
 			}
 		break;
+		case YALNIX_CVAR_INIT:
+			{
+				int *cvar_idp = (int*)ctx->regs[0];
+				ctx->regs[0] = kernelCvarInit(cvar_idp);
+			}
+		break;
+		case YALNIX_CVAR_SIGNAL:
+			{
+				int cvar_id = ctx->regs[0];
+				ctx->regs[0] = kernelCvarSignal(cvar_id);
+			}
+		break;
+		case YALNIX_CVAR_BROADCAST:
+			{
+				int cvar_id = ctx->regs[0];
+				ctx->regs[0] = kernelCvarBroadcast(cvar_id);
+			}
+		break;
+		case YALNIX_CVAR_WAIT:
+			{
+				int cvar_id = ctx->regs[0];
+				int lock_id = ctx->regs[1];
+				ctx->regs[0] = kernelCvarWait(cvar_id, lock_id);
+			}
+		break;
 	}
 }
 

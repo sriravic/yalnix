@@ -90,7 +90,92 @@ int deleteLock(){
     return -1;
 }
 
-// Utility functions
+/***** CVar functions *****/
+void cvarEnqueue(CVarQueueNode* cvarQueueNode)
+{
+    if(gCVarQueue.m_head == NULL)
+    {
+        // empty list
+        gCVarQueue.m_head = cvarQueueNode;
+        gCVarQueue.m_tail = cvarQueueNode;
+        cvarQueueNode->m_pNext = NULL;
+    }
+    else
+    {
+        // add to end
+        gCVarQueue.m_tail->m_pNext = cvarQueueNode;
+        cvarQueueNode->m_pNext = NULL;
+        gCVarQueue.m_tail = cvarQueueNode;
+    }
+}
+
+void cvarWaitingEnqueue(CVarQueueNode* cvarQueueNode, PCB* pcb)
+{
+    processEnqueue(cvarQueueNode->m_waitingQueue, pcb);
+}
+
+PCB* cvarWaitingDequeue(CVarQueueNode* cvarQueueNode)
+{
+    return processDequeue(cvarQueueNode->m_waitingQueue);
+}
+
+CVarQueueNode* getCVarQueueNode(int cvarId)
+{
+    CVarQueueNode* currCVarQueueNode = gCVarQueue.m_head;
+    while(currCVarQueueNode != NULL)
+    {
+        if(currCVarQueueNode->m_pCVar->m_id == cvarId)
+        {
+            return currCVarQueueNode;
+        }
+        currCVarQueueNode = currCVarQueueNode->m_pNext;
+    }
+    return NULL;
+}
+
+int createCVar(int pid)
+{
+    // initialize new cvar
+    CVar* newCVar = (CVar*)malloc(sizeof(CVar));
+    if(newCVar == NULL)
+    {
+        return ERROR;
+    }
+    newCVar->m_id = getUniqueSyncId(SYNC_CVAR);
+    newCVar->m_owner = pid;
+    newCVar->m_lockId = 0;
+
+    // initialize new PCBQueue for the waiting list
+    PCBQueue* newPCBQueue = (PCBQueue*)malloc(sizeof(PCBQueue));
+    if(newPCBQueue == NULL)
+    {
+        return ERROR;
+    }
+    memset(newPCBQueue, 0, sizeof(PCBQueue));
+
+    // initialize new CVarQueueNode
+    CVarQueueNode* newCVarQueueNode = (CVarQueueNode*)malloc(sizeof(CVarQueueNode));
+    if(newCVarQueueNode == NULL)
+    {
+        return ERROR;
+    }
+    newCVarQueueNode->m_pCVar = newCVar;
+    newCVarQueueNode->m_waitingQueue = newPCBQueue;
+    newCVarQueueNode->m_pNext = NULL;
+
+    // put the CVarQueueNode in the CVarQueue
+    cvarEnqueue(newCVarQueueNode);
+
+    // return the new lock's id
+    return newCVar->m_id;
+}
+
+int deleteCVar() // to be implemented when we write kernelReclaim
+{
+    return -1;
+}
+
+/***** utility functions *****/
 int getUniqueSyncId(SyncType t)
 {
     int nextId = gSID++;
