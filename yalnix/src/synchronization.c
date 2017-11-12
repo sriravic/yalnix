@@ -96,11 +96,11 @@ int getUniqueSyncId(SyncType t)
 {
     int nextId = gSID++;
     if(t == SYNC_LOCK)
-        return (nextId | 0x10000000);
-    else if(t == SYNC_PIPE)
-        return (nextId | 0x20000000);
+        return (nextId | LOCK_MASK);
     else if(t == SYNC_CVAR)
-        return (nextId | 0x30000000);
+        return (nextId | CVAR_MASK);
+    else if(t == SYNC_PIPE)
+        return (nextId | PIPE_MASK);
     else
     {
         TracePrintf(0, "INVALID SyncType passed.!!");

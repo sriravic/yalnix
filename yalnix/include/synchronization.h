@@ -23,8 +23,8 @@ Description: Contains the synchronization primitives provided by yalnix to the u
 enum SYNC_TYPE
 {
 	SYNC_LOCK,
-	SYNC_PIPE,
 	SYNC_CVAR,
+	SYNC_PIPE,
 	SYNC_UNDEFINED
 };
 
