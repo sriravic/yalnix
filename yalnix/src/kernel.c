@@ -7,6 +7,7 @@
 #include <terminal.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
+#include <synchronization.h>
 
 // convenient macros
 #define INIT_QUEUE_HEADS(A) { A.m_head = NULL; A.m_tail = NULL; }
@@ -45,6 +46,9 @@ PCBQueue gReadBlockedQ;
 PCBQueue gReadFinishedQ;
 PCBQueue gWriteBlockedQ;
 PCBQueue gWriteFinishedQ;
+
+// The global synchronization queues
+LockQueue gLockQueue;
 
 // interrupt vector table
 // we have 7 types of interrupts
@@ -339,6 +343,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	INIT_QUEUE_HEADS(gWriteBlockedQ);
 	INIT_QUEUE_HEADS(gWriteFinishedQ);
 
+	// create initial synchronization queues
+	INIT_QUEUE_HEADS(gLockQueue);
+
 	// Set the page table entries for the kernel in the correct register before enabling VM
 	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
 	WriteRegister(REG_PTLR0, gNumPagesR0);
@@ -566,7 +573,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	swapPageTable(pIdlePCB);
 
-	char idleprog[] = "testterminal";
+	char idleprog[] = "testlock";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 

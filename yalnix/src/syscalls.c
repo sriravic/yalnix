@@ -706,6 +706,11 @@ int kernelRelease(int lock_id) {
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
 
     LockQueueNode* lockNode = getLockNode(lock_id);
+    if(lockNode == NULL)
+    {
+        return ERROR;
+    }
+    
     Lock* lock = lockNode->m_pLock;
     if(lock->m_owner != currPCB->m_pid)
     {

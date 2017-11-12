@@ -54,9 +54,10 @@ void interruptKernel(UserContext* ctx)
 							}
 						}
 					}
+					memcpy(ctx, parentpcb->m_uctx, sizeof(UserContext));
 				}
 			}
-			break;
+		break;
 		case YALNIX_EXEC:
 			{
 				// the return codes are stored in the pcb's user context
@@ -79,7 +80,7 @@ void interruptKernel(UserContext* ctx)
 					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
 				}
 			}
-			break;
+		break;
 		case YALNIX_EXIT:
 			{
 				TracePrintf(2, "Process exited\n");
@@ -115,7 +116,7 @@ void interruptKernel(UserContext* ctx)
 				// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 stack pages
 				freePCB(currPCB);
 			}
-			break;
+		break;
         case YALNIX_WAIT:
             {
                 // try to find some other process to run in its place
@@ -133,20 +134,20 @@ void interruptKernel(UserContext* ctx)
 				}
 				ctx->regs[0] = (u_long)child_pid;
             }
-        	break;
+        break;
         case YALNIX_BRK:
             {
 				void* addr = (void *)ctx->regs[0];
 				TracePrintf(2, "Brk address is: %x\n", addr);
             	kernelBrk(addr);
             }
-            break;
+        break;
         case YALNIX_GETPID:
             {
 				int pid = kernelGetPid();
 				ctx->regs[0] = (u_long)pid;
             }
-            break;
+        break;
 		case YALNIX_DELAY:
 				{
 					int clock_ticks = ctx->regs[0];
@@ -181,7 +182,7 @@ void interruptKernel(UserContext* ctx)
 				break;
         	default:
             // all others are not implemented syscalls are not implemented.
-            	break;
+        break;
 		case YALNIX_TTY_READ:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -224,7 +225,7 @@ void interruptKernel(UserContext* ctx)
 					TracePrintf(0, "No free process to run\n");
 				}
 			}
-			break;
+		break;
 		case YALNIX_TTY_WRITE:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -275,7 +276,25 @@ void interruptKernel(UserContext* ctx)
 					TracePrintf(0, "Error: No process to run.!!\n");
 				}
 			}
-			break;
+		break;
+		case YALNIX_LOCK_INIT:
+			{
+				int* lock_idp = (int*)ctx->regs[0];
+				ctx->regs[0] = kernelLockInit(lock_idp);
+			}
+		break;
+		case YALNIX_LOCK_ACQUIRE:
+			{
+				int lock_id = ctx->regs[0];
+				ctx->regs[0] = kernelAcquire(lock_id);
+			}
+		break;
+		case YALNIX_LOCK_RELEASE:
+			{
+				int lock_id = ctx->regs[0];
+				ctx->regs[0] = kernelRelease(lock_id);
+			}
+		break;
 	}
 }
 
@@ -353,9 +372,9 @@ void interruptClock(UserContext* ctx)
 
 			// swap the two pcbs
 			processDequeue(&gRunningProcessQ);
-			processEnqueue(&gRunningProcessQ, nextPCB);
-			processDequeue(&gReadyToRunProcessQ);					// remove the process that was picked to run
 			processEnqueue(&gReadyToRunProcessQ, currPCB);
+			processDequeue(&gReadyToRunProcessQ);					// remove the process that was picked to run
+			processEnqueue(&gRunningProcessQ, nextPCB);
 
 			// swap out the page tables
 			swapPageTable(nextPCB);

@@ -123,7 +123,7 @@ struct ReadPipeQueue
 */
 
 // Globally defined pipes
-struct LockQueue* gLockQueue;			// the global lock queue
+extern LockQueue gLockQueue;			// the global lock queue
 // struct CVarQueueNode* gCVarQueue;			// the global cvar queue
 // struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
 // struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue

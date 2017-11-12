@@ -3,6 +3,7 @@
 int main(int argc, char** argv)
 {
     int rc = Fork();
+    TracePrintf(0, "RETURN CODE IS %d.\n", rc);
     if(rc == 0)
     {
         TracePrintf(0, "fork succeeded : Child process\n");
