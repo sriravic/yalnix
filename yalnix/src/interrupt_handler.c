@@ -320,6 +320,72 @@ void interruptKernel(UserContext* ctx)
 				ctx->regs[0] = kernelRelease(lock_id);
 			}
 		break;
+		case YALNIX_PIPE_INIT:
+		{
+			PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+			int* pipe_idp = (int*)ctx->regs[0];
+			memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+			int rc = kernelPipeInit(pipe_idp);
+			ctx->regs[0] = rc;
+		}
+		break;
+		case YALNIX_PIPE_READ:
+		{
+			PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+			int pipe_id = (int)ctx->regs[0];
+			void* buff = (void*)ctx->regs[1];
+			int len = (int)ctx->regs[2];
+			int actuallyRead = 0;
+			int rc = kernelPipeRead(pipe_id, buff, len, &actuallyRead);
+			// we might have to switch processes here if we didnt get enough bytes
+			if(actuallyRead == len)
+			{
+				// we read required bytes
+				// we are good to go.!
+				memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+				ctx->regs[0] = actuallyRead;
+			}
+			else
+			{
+				// do a context switch operation
+				processDequeue(&gRunningProcessQ);
+				pipeReadWaitEnqueue(pipe_id, len, currpcb);
+				PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+				if(nextpcb != NULL)
+				{
+					int rc = KernelContextSwitch(MyKCS, currpcb, nextpcb);
+					if(rc == -1)
+					{
+						TracePrintf(0, "Context Switch Failed\n");
+					}
+					else
+					{
+						processEnqueue(&gRunningProcessQ, nextpcb);
+						swapPageTable(nextpcb);
+						memcpy(ctx, nextpcb->m_uctx, sizeof(UserContext));
+						return;
+					}
+				}
+				else
+				{
+					TracePrintf(0, "ERROR: No process to run\n");
+				}
+			}
+		}
+		break;
+		case YALNIX_PIPE_WRITE:
+		{
+			PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+			int pipe_id = (int)ctx->regs[0];
+			void* buff = (void*)ctx->regs[1];
+			int len = (int)ctx->regs[2];
+			int rc = kernelPipeWrite(pipe_id, buff, len);
+			memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+			ctx->regs[0] = rc;
+		}
 		case YALNIX_CVAR_INIT:
 			{
 				int *cvar_idp = (int*)ctx->regs[0];
@@ -399,6 +465,9 @@ void interruptClock(UserContext* ctx)
 			process = processDequeue(&gWriteFinishedQ);
 		}
 	}
+
+	// process outstanding pipe read Requests
+	processPendingPipeReadRequests();
 
 	// if this process has run for too long
 	// say 3 ticks, then swap it with a different process in the ready to run queue

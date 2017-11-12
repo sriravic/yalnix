@@ -210,3 +210,97 @@ int getSyncIdOnly(int compoundId)
 {
     return (compoundId & 0x0FFFFFFF);
 }
+
+// adds a new entry in the global pipe lists
+void pipeEnqueue(int uid)
+{
+    PipeQueueNode* node = (PipeQueueNode*)malloc(sizeof(PipeQueueNode));
+    node->m_pipe = (Pipe*)malloc(sizeof(Pipe));
+    if(node->m_pipe != NULL)
+    {
+        node->m_pipe->m_len = 0;
+        node->m_pipe->m_validLength = 0;
+        node->m_pipe->m_buffer = NULL;
+        node->m_pipe->m_id = uid;
+    }
+    else
+    {
+        TracePrintf(0, "Error allocating space for pipe entry\n");
+    }
+
+    // do queue operations
+    if(gPipeQueue.m_head == NULL)
+    {
+        // empty list
+        gPipeQueue.m_head = node;
+        gPipeQueue.m_tail = node;
+        node->m_next = NULL;
+    }
+    else
+    {
+        // add to end
+        gPipeQueue.m_tail->m_next = node;
+        node->m_next = NULL;
+        gPipeQueue.m_tail = node;
+    }
+
+}
+
+Pipe* getPipeNode(int uid)
+{
+    PipeQueueNode* curr = gPipeQueue.m_head;
+    PipeQueueNode* next = curr;
+    if(curr == NULL)
+    {
+        TracePrintf(0, "ERROR: PipeQueue was empty\n");
+    }
+    while(next != NULL)
+    {
+        if(curr->m_pipe->m_id == uid) return curr->m_pipe;
+        else
+        {
+            curr = next;
+            next = next->m_next;
+        }
+    }
+    TracePrintf(0, "Pipe ID was not found\n");
+    return NULL;
+}
+
+int pipeReadWaitEnqueue(int id, int len, PCB* pcb)
+{
+    PipeReadWaitQueueNode* node = (PipeReadWaitQueueNode*)malloc(sizeof(PipeReadWaitQueueNode));
+    if(node != NULL)
+    {
+        node->m_pcb = pcb;
+        node->m_id = id;
+        node->m_len = len;
+        if(gPipeReadWaitQueue.m_head == NULL)
+        {
+            gPipeReadWaitQueue.m_head = node;
+            gPipeReadWaitQueue.m_tail = node;
+            node->m_next = NULL;
+        }
+        else
+        {
+            gPipeReadWaitQueue.m_tail->m_next = node;
+            node->m_next = NULL;
+            gPipeReadWaitQueue.m_tail = node;
+        }
+    }
+    else
+    {
+        TracePrintf(0, "Error allocating memory for pipe read wait queue node\n");
+        return ERROR;
+    }
+}
+
+void processPendingPipeReadRequests()
+{
+
+}
+
+void freePipe(int id)
+{
+    
+}

@@ -747,6 +747,7 @@ int kernelCvarInit(int *cvar_idp) {
 
 int kernelCvarSignal(int cvar_id) {
 	// Find the cvar referred to by cvar_id and notify the first process waiting on it
+
     // Wake up a waiter
     return -1;
 }
@@ -759,7 +760,15 @@ int kernelCvarBroadcast(int cvar_id) {
 
 int kernelCvarWait(int cvar_id, int lock_id) {
 	// Release the lock referenced by lock_id
+    int rc = kernelRelease(lock_id);
+    if(rc == ERROR)
+    {
+        return ERROR;
+    }
+
 	// Add the calling process to the waiting queue for cvar_id
+
+
 	// Wait to be notified by a CvarSignal or CvarBroadcast
     // Acquire the lock again
     return -1;
