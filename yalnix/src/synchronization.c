@@ -56,8 +56,7 @@ int createLock(int pid)
     {
         return ERROR;
     }
-    newLock->m_id = gSID;
-    gSID++;
+    newLock->m_id = getUniqueSyncId(SYNC_LOCK);
     newLock->m_owner = pid;
     newLock->m_state = LOCKED;
 

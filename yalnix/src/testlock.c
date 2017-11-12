@@ -18,18 +18,26 @@ int main(int argc, char** argv)
         // child
         int cpid = GetPid();
         TracePrintf(0, "Child process %d trying to acquire lock %d.\n", cpid, lock_id);
-        // int acquire_rc = Acquire(lock_id);
-        // if(acquire_rc == SUCCESS)
-        // {
-        //     TracePrintf(0, "Child process %d successfully acquired lock %d.\n", cid, lock_id);
-        // }
+
+        int acquire_rc = Acquire(lock_id);
+        if(acquire_rc == ERROR)
+        {
+            TracePrintf(0, "Child process %d failed to acquire lock %d.\n", cpid, lock_id);
+        }
+        TracePrintf(0, "Child process %d successfully acquired lock %d.\n", cpid, lock_id);
+
+        while(1)
+        {
+            TracePrintf(0, "Child Process : %d\n", cpid);
+            Pause();
+        }
     }
     else
     {
         // parent
         int ppid = GetPid();
         TracePrintf(0, "Parent process %d holding lock for a few seconds then releasing it.\n", ppid);
-        int hold_time = 3;
+        int hold_time = 5;
         while(hold_time > 0)
         {
             TracePrintf(0, "Parent Process : %d\n", ppid);
