@@ -19,6 +19,7 @@ int kernelFork(void)
     // Get the current running process's pcb
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
+    memset(nextpcb, 0, sizeof(PCB));
     PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
     memset(nextpt, 0, sizeof(PageTable));
     PageTable* currpt = currpcb->m_pt;
@@ -640,24 +641,97 @@ int kernelPipeInit(int *pipe_idp)
 {
 	// Create a new pipe with a unique id, owned by the calling process
     // Save the id into pipe_idp
-    return -1;
+    int uid = getUniqueSyncId(SYNC_PIPE);
+    if(uid == 0xFFFFFFFF)
+        return ERROR;
+    else
+    {
+        pipeEnqueue(uid);
+        *pipe_idp = uid;
+        return SUCCESS;
+    }
 }
 
-int kernelPipeRead(int pipe_id, void *buf, int len)
+int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead)
 {
-	// Add the pipe referenced by pipe_id to the gReadPipeQueue
-	// Wait for the bytes to be available at the pipe
-	// Read bytes from the pipe
-    // Return the number of bytes read
-    return -1;
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    Pipe* p = getPipeNode(pipe_id);
+    if(p == NULL)
+    {
+        TracePrintf(0, "ERROR: Invalid pipe id provided\n");
+        return ERROR;
+    }
+    else
+    {
+        if(len <= p->m_validLength)
+        {
+            // request served immediately
+            memcpy(buf, p->m_buffer, sizeof(char) * len);
+            *actuallyRead = len;
+            return len;
+        }
+        else
+        {
+            // we dont have enough bytes
+            *actuallyRead = 0;
+            return 0;
+        }
+    }
 }
 
 int kernelPipeWrite(int pipe_id, void *buf, int len)
 {
-	// Add the pipe referenced by pipe_id to the gWritePipeQueue
-	// Write len bytes to the buffer
-    // Return
-    return -1;
+	Pipe* p = getPipeNode(pipe_id);
+    if(p == NULL)
+    {
+        TracePrintf(0, "ERROR: Invalid pipe id provided\n");
+        return ERROR;
+    }
+    else
+    {
+        if(p->m_validLength == 0)
+        {
+            // the first time this is called
+            // so allocate memory
+            void* pdata = (void*)malloc(sizeof(char) * len);
+            if(pdata != NULL)
+            {
+                p->m_len = len;
+                p->m_validLength = len;
+                p->m_buffer = pdata;
+                memcpy(p->m_buffer, buf, sizeof(char) * len);
+                return len;
+            }
+            else
+            {
+                TracePrintf(0, "ERROR: Unable to allocate memroy for pipe\n");
+                return ERROR;
+            }
+        }
+        else
+        {
+            // check if the new size is greater than old size
+            // if so, free the current memory
+            // and allocate new memory for pipe
+            // else if less, clear the memory, and modify the valid length
+            if(len > p->m_len)
+            {
+                free(p->m_buffer);
+                p->m_buffer = (void*)malloc(sizeof(char) * len);
+                p->m_len = len;
+                p->m_validLength = len;
+                memcpy(p->m_buffer, buf, sizeof(char) * len);
+                return len;
+            }
+            else
+            {
+                memset(p->m_buffer, 0, sizeof(char) * p->m_len);
+                memcpy(p->m_buffer, buf, sizeof(char) * len);
+                p->m_validLength = len;
+                return len;
+            }
+        }
+    }
 }
 
 // Create a new lock with a unique id, owned by the calling process, and initially unlocked
@@ -769,5 +843,24 @@ int kernelReclaim(int id) {
 	// If the calling process is not the owner of the lock/cvar/pipe referenced by id, return ERROR
 	// Free all resources held by the lock/cvar/pipe (usually waiting queues)
     // Remove the lock/cvar/pipe from its global list
-    return -1;
+    SyncType t = getSyncType(id);
+    if(t == SYNC_LOCK)
+    {
+
+    }
+    else if(t == SYNC_CVAR)
+    {
+
+    }
+    else if(t == SYNC_PIPE)
+    {
+        Pipe* p = getPipeNode(id);
+        if(p == NULL)
+        {
+            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent pipe\n");
+            return ERROR;
+        }
+        else
+            freePipe(id);
+    }
 }

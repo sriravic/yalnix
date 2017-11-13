@@ -62,13 +62,17 @@ struct CVar
     int m_lockId;		// the lock id associated with the condition variable
 };
 typedef struct CVar CVar;
-/*
+
 struct Pipe
 {
-	uint32_t m_id;			// the unique identifier for a pipe
-	uint32_t m_owner;		// the owner of a pipe
+	int m_id;			// the unique identifier for a pipe
+	void* m_buffer;		// the buffer where the pipe's contents are stored
+	int m_len;			// the length of the m_buffer
+	int m_validLength;	// in case of reuse of pipes, we can reuse memory allocated, but make sure only data is valid till this length
 };
-*/
+
+typedef struct Pipe Pipe;
+
 // Since the synchronization primitives are all facilities provided by the kernel to
 // userland processes, we are completely free to control the global list of all locks, cvars, pipes
 // that are opened and closed in a sequential but safe manner
@@ -124,33 +128,48 @@ CVarQueueNode* getCVarQueueNode(int cvarId);
 int createCVar(int pid);
 int deleteCVar(); // to be implemented when we write kernelReclaim
 
-
-/*
-// Pipe handling code
-// We have two global queues for pipes. One for all the pipes that have writing processes to them
-// and other queues for processes reading from pipes. For now we assume that one process can read and one process can
-// write to a pipe at time. We are not sure about multi-process pipes.
-struct WritePipeQueue
+// This node is used to store processes waiting on data from pipes
+struct PipeQueueNode
 {
-	Pipe* m_pipe;						// a pointer to a pipe that is writing to memory
-	void* p_mem;						// the pointer to where within the kerneld data will this pipe's contents be moved to
-	struct WritePipeQueue* m_next;		// a pointer to the next active pipe within the system
-	int m_status;						// a status flag to indicate if we are done writing to the pipe so that the OS can do appropriate stuff
+	Pipe* m_pipe;
+	struct PipeQueueNode* m_next;
 };
 
-struct ReadPipeQueue
+struct PipeReadWaitQueueNode
 {
-	Pipe* m_pipe;						// the pointer the pipe from which data will be read
-	void* p_mem;						// location in kernel memory where the pipe's data resides
-	struct ReadPipeQueue* m_next;		// a pointer to the next entry in the pipe queue that is a read pipe process
-	int m_status;						// the status of the particular pipe
+	PCB* m_pcb;
+	int m_id;
+	int m_len;
+	struct PipeReadWaitQueueNode* m_next;
 };
-*/
+
+struct PipeQueue
+{
+	struct PipeQueueNode* m_head;
+	struct PipeQueueNode* m_tail;
+};
+
+struct PipeReadWaitQueue
+{
+	struct PipeReadWaitQueueNode* m_head;
+	struct PipeReadWaitQueueNode* m_tail;
+};
+
+typedef struct PipeQueueNode PipeQueueNode;
+typedef struct PipeReadWaitQueueNode PipeReadWaitQueueNode;
+typedef struct PipeQueue PipeQueue;
+typedef struct PipeReadWaitQueue PipeReadWaitQueue;
+
+void pipeEnqueue(int id);
+int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb);
+Pipe* getPipeNode(int id);
+void processPendingPipeReadRequests();
+void freePipe(int id);
 
 // Globally defined pipes
 extern LockQueue gLockQueue;			// the global lock queue
 extern CVarQueue gCVarQueue;			// the global cvar queue
-// struct WritePipeQueue* gWritePipeQueue;		// the glboal write pipe queue
-// struct ReadPipeQueue* gReadPipeQueue;		// the global read pipe queue
+extern PipeQueue gPipeQueue;					// global queue for pipes
+extern PipeReadWaitQueue gPipeReadWaitQueue;	// global queue for processes waiting on pipes
 
 #endif
