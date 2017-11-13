@@ -77,12 +77,6 @@ bool isEmptyProcessQueue(PCBQueue* Q);
 int getProcessQueueSize(PCBQueue* Q);
 void removeFromQueue(PCBQueue* Q, PCB* process);
 
-// hierarchical representation of process formation in the system
-struct ProcessHierarchyNode
-{
-
-};
-
 // Struct for keeping track of the data of a terminated process
 struct ExitData
 {
