@@ -140,6 +140,7 @@ struct PipeReadWaitQueueNode
 	PCB* m_pcb;
 	int m_id;
 	int m_len;
+	void* m_buf;
 	struct PipeReadWaitQueueNode* m_next;
 };
 
@@ -161,7 +162,7 @@ typedef struct PipeQueue PipeQueue;
 typedef struct PipeReadWaitQueue PipeReadWaitQueue;
 
 void pipeEnqueue(int id);
-int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb);
+int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb, void* buff);
 Pipe* getPipeNode(int id);
 void processPendingPipeReadRequests();
 void freePipe(int id);

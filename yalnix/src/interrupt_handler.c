@@ -344,6 +344,7 @@ void interruptKernel(UserContext* ctx)
 				int lock_id = ctx->regs[1];
 				ctx->regs[0] = kernelCvarWait(cvar_id, lock_id);
 			}
+			break;
 		case YALNIX_PIPE_INIT:
 		{
 			PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -375,7 +376,7 @@ void interruptKernel(UserContext* ctx)
 			{
 				// do a context switch operation
 				processDequeue(&gRunningProcessQ);
-				pipeReadWaitEnqueue(pipe_id, len, currpcb);
+				pipeReadWaitEnqueue(pipe_id, len, currpcb, buff);
 				PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
 				if(nextpcb != NULL)
 				{

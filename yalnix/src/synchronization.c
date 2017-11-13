@@ -267,7 +267,7 @@ Pipe* getPipeNode(int uid)
     return NULL;
 }
 
-int pipeReadWaitEnqueue(int id, int len, PCB* pcb)
+int pipeReadWaitEnqueue(int id, int len, PCB* pcb, void* buff)
 {
     PipeReadWaitQueueNode* node = (PipeReadWaitQueueNode*)malloc(sizeof(PipeReadWaitQueueNode));
     if(node != NULL)
@@ -275,6 +275,7 @@ int pipeReadWaitEnqueue(int id, int len, PCB* pcb)
         node->m_pcb = pcb;
         node->m_id = id;
         node->m_len = len;
+        node->m_buf = buff;
         if(gPipeReadWaitQueue.m_head == NULL)
         {
             gPipeReadWaitQueue.m_head = node;
@@ -297,10 +298,43 @@ int pipeReadWaitEnqueue(int id, int len, PCB* pcb)
 
 void processPendingPipeReadRequests()
 {
-
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    PipeReadWaitQueueNode* node = gPipeReadWaitQueue.m_head;
+    if(node != NULL)
+    {
+        do {
+            int pipeid = node->m_id;
+            Pipe* pipe = getPipeNode(pipeid);
+            if(pipe != NULL)
+            {
+                int requested = node->m_len;
+                int available = pipe->m_validLength;
+                if(requested <= available)
+                {
+                    // we have the requested bytes
+                    // temporarily swap the page pagetables
+                    // and copy the contents into the processes address space
+                    swapPageTable(node->m_pcb);
+                    memcpy(node->m_buf, pipe->m_buffer, sizeof(requested));
+                }
+                else
+                {
+                    // We did not get enough
+                    // break and try again later
+                    break;
+                }
+            }
+            else
+            {
+                // pipe was not found
+                // goto next nodes
+                node = node->m_next;
+            }
+        } while(node != NULL);
+    }
 }
 
 void freePipe(int id)
 {
-    
+
 }
