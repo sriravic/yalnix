@@ -76,7 +76,7 @@ int SetKernelBrk(void* addr)
 	{
 		// virtual memory has been enabled.
 		// check for correct frames and update the kernel heap page tables
-		TracePrintf(0, "SetkernelBrk called after VM enabled\n");
+		TracePrintf(2, "SetkernelBrk called after VM enabled\n");
 		unsigned int newBrkAddr = (unsigned int)addr;
 		unsigned int oldBrkAddr = (unsigned int)gKernelBrk;
 		unsigned int oldBrkPg = oldBrkAddr / PAGESIZE;
@@ -86,7 +86,7 @@ int SetKernelBrk(void* addr)
 			// the heap was grown
 			// set the address to the new address
 			int pg;
-			for(pg = newBrkPg; pg <= newBrkPg; pg++)
+			for(pg = oldBrkPg; pg <= newBrkPg; pg++)
 			{
 				FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
 				if(frame != NULL)
@@ -100,6 +100,7 @@ int SetKernelBrk(void* addr)
 					TracePrintf(0, "Unable to find new frames for kernel brk\n");
 				}
 			}
+			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 		}
 		else
 		{
@@ -115,9 +116,9 @@ int SetKernelBrk(void* addr)
 				gKernelPageTable.m_pte[pg].pfn = 0;
 			}
 		}
-
 		// update the brk
 		gKernelBrk = addr;
+		return 0;
 	}
 }
 
