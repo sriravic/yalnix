@@ -621,13 +621,19 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		{
 			// We might have waken up as another process here
 			// just to make sure check what the current running PCB is
-			PCB* myownpcb = getHeadProcess(&gRunningProcessQ);
-			if(myownpcb->m_pid != 0)
+			if(gKernelPageTable.m_pte[gKStackPg0].pfn != 126 && gKernelPageTable.m_pte[gKStackPg0].pfn != 127)
 			{
 				TracePrintf(0, "Hurray I am alive.\n");
-				swapPageTable(myownpcb);
-				uctx->pc = myownpcb->m_uctx->pc;
-				uctx->sp = myownpcb->m_uctx->sp;
+				swapPageTable(pIdlePCB);
+
+				PCB* dequed = processDequeue(&gRunningProcessQ);
+				processEnqueue(&gReadyToRunProcessQ, dequed);
+				processRemove(&gReadyToRunProcessQ, pIdlePCB);					// remove the process that was picked to run
+				processEnqueue(&gRunningProcessQ, pIdlePCB);
+
+				uctx->pc = pIdlePCB->m_uctx->pc;
+				uctx->sp = pIdlePCB->m_uctx->sp;
+				return;
 			}
 		}
 	}

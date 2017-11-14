@@ -482,15 +482,15 @@ void interruptClock(UserContext* ctx)
 			}
 
 			// swap the two pcbs
-			processDequeue(&gRunningProcessQ);
-			processEnqueue(&gReadyToRunProcessQ, currPCB);
-			processDequeue(&gReadyToRunProcessQ);					// remove the process that was picked to run
-			processEnqueue(&gRunningProcessQ, nextPCB);
+			PCB* old = processDequeue(&gRunningProcessQ);
+			processEnqueue(&gReadyToRunProcessQ, old);
+			processRemove(&gReadyToRunProcessQ, currPCB);					// remove the process that was picked to run
+			processEnqueue(&gRunningProcessQ, currPCB);
 
 			// swap out the page tables
-			swapPageTable(nextPCB);
+			swapPageTable(currPCB);
 
-			memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+			memcpy(ctx, currPCB->m_uctx, sizeof(UserContext));
 			if(nextPCB->m_iodata != NULL)
 			{
 				// we have io data ready for this process
