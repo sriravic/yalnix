@@ -34,6 +34,7 @@ struct ProcessControlBlock
     UserContext* m_uctx;                            //  pointer to the user context
     KernelContext* m_kctx;                          //  pointer to the kernel context;
     PageTable* m_pt;                                //  pointer to the page table for the process
+    UserProgPageTable* m_pagetable;                 //  pointer to the actual user mode page table.
     unsigned int m_brk;                             // the brk location of this process.
     unsigned int m_ticks;                           // increment the number of ticks this process has been running for
     unsigned int m_timeToSleep;                     // how long we expect to sleep for

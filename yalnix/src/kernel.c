@@ -21,8 +21,7 @@ int gSID = 0;
 void* gKernelBrk;
 
 // the global kernel page table
-PageTable gKernelPageTable;
-unsigned int gKernelSP;					// the address of the kernel stack pointer.
+KernelPageTable gKernelPageTable;
 
 // the global free frame lists
 FrameTableEntry gFreeFramePool;

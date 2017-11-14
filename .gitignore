@@ -15,3 +15,10 @@ yalnix/src/idle
 yalnix/src/yalnix
 yalnix/sample/Makefile
 yalnix/src/init
+yalnix/src/helloworld
+yalnix/src/testexec
+yalnix/src/testfork
+yalnix/src/testlock
+yalnix/src/testmath
+yalnix/src/testpipe
+yalnix/src/testterminal

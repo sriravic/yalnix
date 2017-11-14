@@ -11,9 +11,10 @@ struct pagetable
 };
 
 // some global constants we precompute for ease of DiskAccess
-const unsigned int gKStackPages = unsigned int(KERNEL_STACK_MAXSIZE / PAGESIZE);
-const unsigned int gR0Pages 	= unsigned int(VMEM_0_SIZE 			/ PAGESIZE) - gKStackPages;
-const unsigned int gR1Pages 	= unsigned int(VMEM_1_SIZE			/ PAGE_SIZE);
+#define gKStackPages	(KERNEL_STACK_MAXSIZE	/ PAGESIZE)
+#define gKStackPg0		(KERNEL_STACK_BASE		/ PAGESIZE)
+#define gR0Pages		(VMEM_0_SIZE 			/ PAGESIZE)
+#define gR1Pages		(VMEM_1_SIZE			/ PAGESIZE)
 
 // This is the global Kernel page table which is shared by all processes
 struct KernelPageTable
@@ -45,5 +46,6 @@ typedef struct fte FrameTableEntry;
 
 extern FrameTableEntry gFreeFramePool;
 extern FrameTableEntry gUsedFramePool;
+extern KernelPageTable gKernelPageTable;
 
 #endif

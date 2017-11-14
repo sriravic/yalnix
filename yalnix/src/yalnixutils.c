@@ -1,3 +1,4 @@
+#include <pagetable.h>
 #include <yalnixutils.h>
 #include <yalnix.h>
 
@@ -105,12 +106,22 @@ void freeKernelStackFrames(PCB* pcb)
     }
 }
 
+// This method swaps out both R1 pages and kernel stack pages
+void swapPageTable(PCB* process)
+{
+    // swap out kernel stack frameSize
+    gKernelPageTable.m_pte[gKStackPg0 + 0].pfn = process->m_pagetable->m_kstack[0].pfn;
+    gKernelPageTable.m_pte[gKStackPg0 + 1].pfn = process->m_pagetable->m_kstack[1].pfn;
 
-void swapPageTable(PCB* process){
-    WriteRegister(REG_PTBR0, (unsigned int)process->m_pt->m_pte);
-    WriteRegister(REG_PTLR0, (NUM_VPN >> 1));
-    WriteRegister(REG_PTBR1, (unsigned int)(process->m_pt->m_pte + (NUM_VPN >> 1)));
-    WriteRegister(REG_PTLR1, (NUM_VPN >> 1));
+    // swap out R1 space
+    WriteRegister(REG_PTBR1, (unsigned int)(process->m_pagetable->m_pte));
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+}
+
+void setR1PageTableAlone(PCB* process)
+{
+    // swap out R1 space
+    WriteRegister(REG_PTBR1, (unsigned int)(process->m_pagetable->m_pte));
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 }

@@ -29,4 +29,7 @@ void freeKernelStackFrames(PCB* pcb);
 // swaps the page table to the PCB passed in
 void swapPageTable(PCB* process);
 
+// set the R1 region alone. don't swap out the kernel stack.
+void setR1PageTableAlone(PCB* process);
+
 #endif
