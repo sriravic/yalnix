@@ -113,8 +113,8 @@ void freeKernelStackFrames(PCB* pcb)
 void swapPageTable(PCB* process)
 {
     // swap out kernel stack frameSize
-    gKernelPageTable.m_pte[gKStackPg0 + 0].pfn = process->m_pagetable->m_kstack[0].pfn;
-    gKernelPageTable.m_pte[gKStackPg0 + 1].pfn = process->m_pagetable->m_kstack[1].pfn;
+    gKernelPageTable.m_pte[KSTACK_PAGE0 + 0].pfn = process->m_pagetable->m_kstack[0].pfn;
+    gKernelPageTable.m_pte[KSTACK_PAGE0 + 1].pfn = process->m_pagetable->m_kstack[1].pfn;
 
     // swap out R1 space
     WriteRegister(REG_PTBR1, (unsigned int)(process->m_pagetable->m_pte));
@@ -126,6 +126,6 @@ void setR1PageTableAlone(PCB* process)
 {
     // swap out R1 space
     WriteRegister(REG_PTBR1, (unsigned int)(process->m_pagetable->m_pte));
-    WriteRegister(REG_PTLR1, gR1Pages);
+    WriteRegister(REG_PTLR1, R1PAGES);
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 }

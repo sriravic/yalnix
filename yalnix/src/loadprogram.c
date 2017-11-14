@@ -207,7 +207,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a
     // protection of (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = gR1Pages - 1; pg > 0 && allocPages < stack_npg; pg--)
+    for(pg = R1PAGES - 1; pg > 0 && allocPages < stack_npg; pg--)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;

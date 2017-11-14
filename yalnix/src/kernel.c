@@ -212,6 +212,24 @@ KernelContext* GetKCS(KernelContext* kc_in, void* next_pcb_p, void* dummy_pointe
 
 KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
 {
+	PCB* currpcb = (PCB*)curr_pcb_p;
+	PCB* nextpcb = (PCB*)next_pcb_p;
+	if(currpcb != NULL && nextpcb != NULL)
+	{
+		// store the current kernel context
+		if(currpcb->m_kctx == NULL)
+			currpcb->m_kctx = (KernelContext*)malloc(sizeof(KernelContext));
+		memcpy(currpcb->m_kctx, kc_in, sizeof(KernelContext));
+		if(nextpcb->m_kctx != NULL)
+		{
+			gKernelPageTable.m_pte[gKStackPg0 + 0].pfn = nextpcb->m_pagetable->m_kstack[0].pfn;
+			gKernelPageTable.m_pte[gKStackPg0 + 1].pfn = nextpcb->m_pagetable->m_kstack[1].pfn;
+			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+			return nextpcb->m_kctx;
+		}
+		else { TracePrintf(0, "ERROR: No return kernel context was found in nextpcb\n"); return NULL; }
+	}
+	else { TracePrintf(0, "ERROR: one of the pcb's were null\n"); return NULL; }
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
