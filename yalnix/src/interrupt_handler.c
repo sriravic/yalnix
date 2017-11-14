@@ -8,7 +8,8 @@
 
 int debug = 1;
 
-extern KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
+extern KernelContext* GetKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
+extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 // Interrupt handler for kernel syscalls
 void interruptKernel(UserContext* ctx)
@@ -36,7 +37,7 @@ void interruptKernel(UserContext* ctx)
 					{
 						// perform a dummy context switch here to give the child
 						// the starting location to run from
-						rc = KernelContextSwitch(MyKCS, parentpcb, NULL);
+						rc = KernelContextSwitch(GetKCS, parentpcb, NULL);
 						if(rc == -1)
 						{
 							TracePrintf(0, "Error obtaining kernel context during the fork\n");
@@ -97,7 +98,7 @@ void interruptKernel(UserContext* ctx)
 				nextPCB->m_ticks = 0;
 				if(nextPCB != NULL)
 				{
-					int rc = KernelContextSwitch(MyKCS, nextPCB, currPCB);
+					int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
 					if(rc == -1)
 					{
 						TracePrintf(0, "Context switch failed");
@@ -162,7 +163,7 @@ void interruptKernel(UserContext* ctx)
 							PCB* currPCB = getHeadProcess(&gSleepBlockedQ);
 							PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
 							memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
-							int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
+							int rc = KernelContextSwitch(SwitchKCS, currPCB, nextPCB);
 							if(rc == -1)
 							{
 								TracePrintf(0, "Kernel Context switch failed\n");
@@ -191,7 +192,7 @@ void interruptKernel(UserContext* ctx)
 				if(currpcb->m_kctx == NULL)
 				{
 					// do a dummy context switch to get the current kernel context
-					KernelContextSwitch(MyKCS, currpcb, NULL);
+					KernelContextSwitch(SwitchKCS, currpcb, NULL);
 				}
 
 				int tty_id = ctx->regs[0];
@@ -205,7 +206,7 @@ void interruptKernel(UserContext* ctx)
 				nextpcb->m_ticks = 0;
 				if(nextpcb != NULL)
 				{
-					int rc = KernelContextSwitch(MyKCS, currpcb, nextpcb);
+					int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 					if(rc == -1)
 					{
 						TracePrintf(0, "Context switch failed within tty read\n");
@@ -234,7 +235,7 @@ void interruptKernel(UserContext* ctx)
 				if(currpcb->m_kctx == NULL)
 				{
 					// do a dummy context switch to get the current kernel context
-					KernelContextSwitch(MyKCS, currpcb, NULL);
+					KernelContextSwitch(SwitchKCS, currpcb, NULL);
 				}
 
 				int tty_id = ctx->regs[0];
@@ -258,7 +259,7 @@ void interruptKernel(UserContext* ctx)
 				nextpcb->m_ticks = 0;
 				if(nextpcb != NULL)
 				{
-					int rc = KernelContextSwitch(MyKCS, nextpcb, currpcb);
+					int rc = KernelContextSwitch(SwitchKCS, nextpcb, currpcb);
 					if(rc == -1)
 					{
 						TracePrintf(0, "Context switch failed");
@@ -296,7 +297,7 @@ void interruptKernel(UserContext* ctx)
 					nextPCB->m_ticks = 0;
 					if(nextPCB != NULL)
 					{
-						int rc = KernelContextSwitch(MyKCS, nextPCB, currPCB);
+						int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
 						if(rc == -1)
 						{
 							TracePrintf(0, "Context switch failed");
@@ -380,7 +381,7 @@ void interruptKernel(UserContext* ctx)
 				PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
 				if(nextpcb != NULL)
 				{
-					int rc = KernelContextSwitch(MyKCS, currpcb, nextpcb);
+					int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 					if(rc == -1)
 					{
 						TracePrintf(0, "Context Switch Failed\n");
@@ -426,17 +427,7 @@ void interruptClock(UserContext* ctx)
 
 	// update the quantum of runtime for the current running process
 	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-  	if(currPCB->m_kctx == NULL)
-	{
-		// get the first kernel context
-		int rc = KernelContextSwitch(MyKCS, currPCB, NULL);
-		if(rc == -1)
-		{
-			TracePrintf(0, "Getting first context failed");
-			exit(-1);
-		}
-	}
-	currPCB->m_ticks++;
+  	currPCB->m_ticks++;
 
 	/* Decrement the sleep time of each PCB in the sleep queue
 	 * If the PCB's sleep time is zero, it will be moved to the ready to run queue
@@ -483,7 +474,7 @@ void interruptClock(UserContext* ctx)
 			// update the user context
 			currPCB->m_ticks = 0;	// reset ticks
 			PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
-			int rc = KernelContextSwitch(MyKCS, currPCB, nextPCB);
+			int rc = KernelContextSwitch(SwitchKCS, currPCB, nextPCB);
 			if(rc == -1)
 			{
 				TracePrintf(0, "Kernel Context switch failed\n");
@@ -512,12 +503,6 @@ void interruptClock(UserContext* ctx)
 				free(iodata);
 			}
 			return;
-		}
-		else if(currPCB->m_kctx == NULL)
-		{
-			// THIS BRANCH IS PROBABLY A DEAD BRANCH
-			// get the current kernel context to have the context available for successful context switch
-			KernelContextSwitch(MyKCS, currPCB, NULL);
 		}
 	}
 }
@@ -619,7 +604,7 @@ void interruptMath(UserContext* ctx)
 	nextPCB->m_ticks = 0;
 	if(nextPCB != NULL)
 	{
-		int rc = KernelContextSwitch(MyKCS, nextPCB, currPCB);
+		int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
 		if(rc == -1)
 		{
 			TracePrintf(0, "Context switch failed");

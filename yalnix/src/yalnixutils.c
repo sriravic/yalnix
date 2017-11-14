@@ -2,6 +2,8 @@
 #include <yalnixutils.h>
 #include <yalnix.h>
 
+#define SAFE_RELEASE(A) {if(A != NULL) free(A);}
+
 FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool)
 {
     // prev cannot be null
@@ -66,15 +68,16 @@ void freePCB(PCB* pcb)
     freeRegionOneFrames(pcb);
     freeKernelStackFrames(pcb);
     exitDataFree(pcb->m_edQ);     // free exit data queue
-    free(pcb->m_uctx);
-    free(pcb->m_kctx);
-    free(pcb->m_pt);
-    free(pcb);
+    SAFE_RELEASE(pcb->m_uctx);
+    SAFE_RELEASE(pcb->m_kctx);
+    SAFE_RELEASE(pcb->m_pagetable);
+    SAFE_RELEASE(pcb->m_pt);
+    SAFE_RELEASE(pcb);
 }
 
 void freeRegionOneFrames(PCB* pcb)
 {
-    PageTable* pt = pcb->m_pt;
+    UserProgPageTable* pt = pcb->m_pagetable;
     int pageNumber;
 
     // invalidate all the pages for region 1
@@ -94,7 +97,7 @@ void freeKernelStackFrames(PCB* pcb)
     int pageNumber;
     int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
     int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
-    PageTable* pt = pcb->m_pt;
+    UserProgPageTable* pt = pcb->m_pagetable;
 
     for(pageNumber = r0kernelPages; pageNumber < r0StackPages; pageNumber++)
     {
@@ -123,5 +126,6 @@ void setR1PageTableAlone(PCB* process)
 {
     // swap out R1 space
     WriteRegister(REG_PTBR1, (unsigned int)(process->m_pagetable->m_pte));
+    WriteRegister(REG_PTLR1, gR1Pages);
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 }

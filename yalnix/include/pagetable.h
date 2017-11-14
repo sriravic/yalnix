@@ -11,22 +11,22 @@ struct pagetable
 };
 
 // some global constants we precompute for ease of DiskAccess
-#define gKStackPages	(KERNEL_STACK_MAXSIZE	/ PAGESIZE)
-#define gKStackPg0		(KERNEL_STACK_BASE		/ PAGESIZE)
-#define gR0Pages		(VMEM_0_SIZE 			/ PAGESIZE)
-#define gR1Pages		(VMEM_1_SIZE			/ PAGESIZE)
+#define KSTACK_PAGES	(KERNEL_STACK_MAXSIZE	/ PAGESIZE)
+#define KSTACK_PAGE0	(KERNEL_STACK_BASE		/ PAGESIZE)
+#define R0PAGES			(VMEM_0_SIZE 			/ PAGESIZE)
+#define R1PAGES			(VMEM_1_SIZE			/ PAGESIZE)
 
 // This is the global Kernel page table which is shared by all processes
 struct KernelPageTable
 {
-	PageTableEntry m_pte[gR0Pages];
+	PageTableEntry m_pte[NUM_VPN];
 };
 
 // The user mode page tables consist of R1 pages and its corresponding stack frames
 struct UserProgPageTable
 {
-	PageTableEntry m_pte[gR1Pages];
-	PageTableEntry m_kstack[gKStackPages];
+	PageTableEntry m_pte[R1PAGES];
+	PageTableEntry m_kstack[KSTACK_PAGES];
 };
 
 typedef struct KernelPageTable KernelPageTable;
@@ -47,5 +47,6 @@ typedef struct fte FrameTableEntry;
 extern FrameTableEntry gFreeFramePool;
 extern FrameTableEntry gUsedFramePool;
 extern KernelPageTable gKernelPageTable;
+extern UserProgPageTable* gCurrentR1PageTable;
 
 #endif

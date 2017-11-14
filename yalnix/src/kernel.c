@@ -23,12 +23,17 @@ void* gKernelBrk;
 // the global kernel page table
 KernelPageTable gKernelPageTable;
 
+// the current R1 pagetables
+UserProgPageTable* gCurrentR1PageTable = NULL;
+
 // the global free frame lists
 FrameTableEntry gFreeFramePool;
 FrameTableEntry gUsedFramePool;
 
-unsigned int gNumPagesR0 = NUM_VPN >> 1;
-unsigned int gNumPagesR1 = NUM_VPN >> 1;
+unsigned int gNumPagesR0 = VMEM_0_SIZE / PAGESIZE;
+unsigned int gNumPagesR1 = VMEM_1_SIZE / PAGESIZE;
+unsigned int gKStackPages = KSTACK_PAGES;
+unsigned int gKStackPg0 = KSTACK_PAGE0;
 
 // kernel text and data
 unsigned int gKernelDataStart;
@@ -131,38 +136,82 @@ void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
 }
 
-KernelContext* MyKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
+// This function is used in fork and init process to get the correct kernel stack frames
+// and user context to start running from.
+// NOTE : The first argument is the process which we are constructing.
+//		  The second argument is a dummy that we are not interested in at all.
+KernelContext* GetKCS(KernelContext* kc_in, void* next_pcb_p, void* dummy_pointer)
 {
-	PCB* currPCB = (PCB*)curr_pcb_p;
-	PCB* nextPCB = (PCB*)next_pcb_p;
-
-	if(nextPCB == NULL && currPCB->m_kctx == NULL)
+	PCB* nextpcb = (PCB*)next_pcb_p;
+	if(nextpcb != NULL)
 	{
-		// allocate a new chunck for the storing the state of the kernel context
+		// Allocate new memory to store the kernel context
 		KernelContext* ctx = (KernelContext*)malloc(sizeof(KernelContext));
+		if(ctx != NULL)
+		{
+			memcpy(ctx, kc_in, sizeof(KernelContext));
+			nextpcb->m_kctx = ctx;
+		}
+		else
+		{
+			TracePrintf(0, "ERROR: Could not allocate new memory for kernel context\n");
+			return NULL;
+		}
 
-		// this was just to get the current context
-		// copy the context and return the same
-		// and fill in the entries of the currPCB
-		memcpy(ctx, kc_in, sizeof(KernelContext));
-		currPCB->m_kctx = ctx;
-		return ctx;
-	}
-	else if(currPCB != NULL && nextPCB != NULL)
-	{
-		// We store the current state in teh current process
-		memcpy(currPCB->m_kctx, kc_in, sizeof(KernelContext));
+		// Copy current kernel stack pages to the stack pages of the process
+		unsigned int originalKStackPgPfns[2] = { gKernelPageTable.m_pte[gKStackPg0 + 0].pfn,
+												 gKernelPageTable.m_pte[gKStackPg0 + 1].pfn
+											   };
 
-		// return 'to-be-run' context
-		//if(nextPCB->m_kctx == NULL)
-		return currPCB->m_kctx;
-		//else return nextPCB->m_kctx;
+		// First we set the page below the kernel stack to be valid, with correct permissions
+		FrameTableEntry* temp = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+		if(temp != NULL)
+		{
+			gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 1;
+			gKernelPageTable.m_pte[gKStackPg0 - 1].prot = PROT_READ | PROT_WRITE;
+			gKernelPageTable.m_pte[gKStackPg0 - 1].pfn = temp->m_frameNumber;
+			unsigned int tempAddress = (gKStackPg0 - 1) * PAGESIZE;
+			int ksp;
+			for(ksp = 0; ksp < gKStackPages; ksp++)
+			{
+				// copy to temporary location
+				memcpy((void*)(tempAddress), (void*)((ksp + gKStackPg0) * PAGESIZE), PAGESIZE);
+
+				// swap out entries for kernel stack in pagetables
+				gKernelPageTable.m_pte[gKStackPg0 + ksp].pfn = nextpcb->m_pagetable->m_kstack[ksp].pfn;
+				WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+
+				// memcpy again into the new location
+				memcpy((void*)((ksp + gKStackPg0) * PAGESIZE), (void*)(tempAddress), PAGESIZE);
+
+				// swap out entries for original stack again and FLUSH
+				gKernelPageTable.m_pte[gKStackPg0 + ksp].pfn = originalKStackPgPfns[ksp];
+				WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+			}
+
+			// Free that temporary frame
+			freeOneFrame(&gFreeFramePool, &gUsedFramePool, temp->m_frameNumber);
+			gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 0;
+			gKernelPageTable.m_pte[gKStackPg0 - 1].prot = 0;
+			gKernelPageTable.m_pte[gKStackPg0 - 1].pfn = 0;
+			return nextpcb->m_kctx;
+		}
+		else
+		{
+			TracePrintf(0, "ERROR: Could not find one free frame for temporary purposes\n");
+			return NULL;
+		}
 	}
 	else
 	{
-		TracePrintf(0, "Weird scenario - Returning NULL kernel context\n");
+		TracePrintf(0, "ERROR: currpcb was NULL\n");
 		return NULL;
 	}
+	return NULL;
+}
+
+KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p)
+{
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
@@ -353,10 +402,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	INIT_QUEUE_HEADS(gPipeReadWaitQueue);
 
 	// Set the page table entries for the kernel in the correct register before enabling VM
-	WriteRegister(REG_PTBR0, (unsigned int)gKernelPageTable.m_pte);
+	WriteRegister(REG_PTBR0, (unsigned int)(gKernelPageTable.m_pte));
 	WriteRegister(REG_PTLR0, gNumPagesR0);
-	WriteRegister(REG_PTBR1, (unsigned int)(gKernelPageTable.m_pte + gNumPagesR0));
-	WriteRegister(REG_PTLR1, gNumPagesR0);
 
 	// initialize the terminal write + read heads heads
 	int term;
@@ -393,38 +440,29 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	// Load the init program
 	// Create a page table for the new idle process
-	PageTable* pInitPT = (PageTable*)malloc(sizeof(PageTable));
+	UserProgPageTable* pInitPT = (UserProgPageTable*)malloc(sizeof(PageTable));
 	if(pInitPT == NULL)
 	{
 		TracePrintf(0, "unable to create page table for idle process");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 	else
 	{
 		memset(pInitPT, 0, sizeof(PageTable));
 	}
 
-	// copy the kernel's region0 page - STACK FRAME entries into this process's ptes
-	for(i = 0; i < gNumPagesR0 - 2; i++)
-	{
-		if(gKernelPageTable.m_pte[i].valid == 1)
-			pInitPT->m_pte[i] = gKernelPageTable.m_pte[i];
-	}
-
-	// allocate additional two frames for kernel stack of the new process
-	// each process has its own kernel stack that is unique to itself.
-	// it does not share that with other processes.
-	FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-	FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-	pInitPT->m_pte[stackIndex + 0].valid = 1; pInitPT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
-	pInitPT->m_pte[stackIndex + 1].valid = 1; pInitPT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pInitPT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
+	// Init's kernel stack pages are the originally used stack pages in 7E and 7F
+	pInitPT->m_kstack[0].valid = 1; pInitPT->m_kstack[0].prot = PROT_READ | PROT_WRITE; pInitPT->m_kstack[0].pfn = stackIndex + 0;
+	pInitPT->m_kstack[1].valid = 1; pInitPT->m_kstack[1].prot = PROT_READ | PROT_WRITE; pInitPT->m_kstack[1].pfn = stackIndex + 1;
 
 	// Create a PCB entry
 	PCB* pInitPCB = (PCB*)malloc(sizeof(PCB));
 	if(pInitPCB == NULL)
 	{
 		TracePrintf(0, "Unable to create pcb entry for idle process");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 
 	// create a child exit data queue
@@ -440,46 +478,29 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(pInitUC == NULL)
 	{
 		TracePrintf(0, "Unable to create user context for init process");
-		exit(-1);
-	}
-	else
-	{
-		// write out the current context's data into this user context
-		pInitUC->vector = uctx->vector;
-		pInitUC->code = uctx->code;
-		pInitUC->addr = uctx->addr;
-		pInitUC->pc = uctx->pc;
-		pInitUC->sp = uctx->sp;
-		pInitUC->ebp = uctx->ebp;
-		for(i = 0; i < GREGS; i++)
-			pInitUC->regs[i] = uctx->regs[i];
+		uctx = NULL;
+		return;
 	}
 
 	// set the entries in the corresponding PCB
-	pInitPCB->m_pid = gPID++;
-	pInitPCB->m_ppid = pInitPCB->m_pid;		// for now this is its own parent
-	pInitPCB->m_pt = pInitPT;
-	pInitPCB->m_uctx = pInitUC;
-	pInitPCB->m_kctx = NULL;
-	pInitPCB->m_state = PROCESS_RUNNING;
-	pInitPCB->m_ticks = 0;					// 0 for now.
+	pInitPCB->m_pid 		= gPID++;
+	pInitPCB->m_ppid 		= pInitPCB->m_pid;
+	pInitPCB->m_pagetable 	= pInitPT;
+	pInitPCB->m_uctx 		= pInitUC;
+	pInitPCB->m_kctx 		= NULL;
+	pInitPCB->m_state 		= PROCESS_RUNNING;
+	pInitPCB->m_ticks 		= 0;
 	pInitPCB->m_timeToSleep = 0;
-	pInitPCB->m_next = NULL;
-	pInitPCB->m_prev = NULL;
-	pInitPCB->m_edQ = initEDQ;
-	pInitPCB->m_iodata = NULL;
+	pInitPCB->m_next 		= NULL;
+	pInitPCB->m_prev 		= NULL;
+	pInitPCB->m_edQ 		= initEDQ;
+	pInitPCB->m_iodata 		= NULL;
 
-	// add the pcb to running for now
-	// NOTE: we should be moving this to ready-to-run queue and let the scheduler actually pick this process
-	//       and move it to running queue. But we do this for now.
-	//gRunningProcessQ.m_prev = NULL;
-	//gRunningProcessQ.m_next = pInitPCB;
+	// add init to the running process
 	processEnqueue(&gRunningProcessQ, pInitPCB);
 
-	// swap out the page tables
-	// We need to do this because, further virtual address references have to go to the correct frames
-	// load program basically copies text, data into virtual addresses. so the pagetables should reflect this.
-	swapPageTable(pInitPCB);
+	// Set the region1 pagetable entries
+	setR1PageTableAlone(pInitPCB);
 
 	// Call load program
 	int statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
@@ -487,51 +508,38 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(statusCode != SUCCESS)
 	{
 		TracePrintf(0, "Error loading the init process\n");
-		exit(-1);
-	}
-	else
-	{
-		// call switch kernel context to get the current kernel context
-		KernelContextSwitch(MyKCS, pInitPCB, NULL);
+		uctx = NULL;
+		return;
 	}
 
-	// create the idle program also as above
-	// but add it to the ready to run programs list
-	// also make sure to set the correct page tables before letting this happen so that load can succeed
-	// after that, reset the page table registers to start executing in init's context.
-	// Create a page table for the new idle process
-	PageTable* pIdlePT = (PageTable*)malloc(sizeof(PageTable));
+	// Create the idle process
+	UserProgPageTable* pIdlePT = (UserProgPageTable*)malloc(sizeof(PageTable));
 	if(pIdlePT == NULL)
 	{
 		TracePrintf(0, "unable to create page table for idle process");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 	else
 	{
 		memset(pIdlePT, 0, sizeof(PageTable));
 	}
 
-	// copy the kernel's region0 page - STACK FRAME entries into this process's ptes
-	for(i = 0; i < gNumPagesR0 - 2; i++)
-	{
-		if(gKernelPageTable.m_pte[i].valid == 1)
-			pIdlePT->m_pte[i] = gKernelPageTable.m_pte[i];
-	}
-
 	// allocate additional two frames for kernel stack of the new process
 	// each process has its own kernel stack that is unique to itself.
 	// it does not share that with other processes.
-	kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-	kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-	pIdlePT->m_pte[stackIndex + 0].valid = 1; pIdlePT->m_pte[stackIndex + 0].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 0].pfn = kstack1->m_frameNumber;
-	pIdlePT->m_pte[stackIndex + 1].valid = 1; pIdlePT->m_pte[stackIndex + 1].prot = PROT_READ | PROT_WRITE; pIdlePT->m_pte[stackIndex + 1].pfn = kstack2->m_frameNumber;
+	FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+	pIdlePT->m_kstack[0].valid = 1; pIdlePT->m_kstack[0].prot = PROT_READ | PROT_WRITE; pIdlePT->m_kstack[0].pfn = kstack1->m_frameNumber;
+	pIdlePT->m_kstack[1].valid = 1; pIdlePT->m_kstack[1].prot = PROT_READ | PROT_WRITE; pIdlePT->m_kstack[1].pfn = kstack2->m_frameNumber;
 
 	// Create a PCB entry
 	PCB* pIdlePCB = (PCB*)malloc(sizeof(PCB));
 	if(pIdlePCB == NULL)
 	{
 		TracePrintf(0, "Unable to create pcb entry for idle process");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 
 	// create a child exit data queue
@@ -539,7 +547,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(idleEDQ == NULL)
 	{
 		TracePrintf(0, "Unable to create exit data queue for idle process");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 
 	// Create a user context for the idle program
@@ -547,37 +556,26 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(pIdleUC == NULL)
 	{
 		TracePrintf(0, "Unable to create user context for idle process");
-		exit(-1);
-	}
-	else
-	{
-		// write out the current context's data into this user context
-		pIdleUC->vector = uctx->vector;
-		pIdleUC->code = uctx->code;
-		pIdleUC->addr = uctx->addr;
-		pIdleUC->pc = uctx->pc;
-		pIdleUC->sp = uctx->sp;
-		pIdleUC->ebp = uctx->ebp;
-		for(i = 0; i < GREGS; i++)
-			pIdleUC->regs[i] = uctx->regs[i];
+		uctx = NULL;
+		return;
 	}
 
 	// set the entries in the corresponding PCB
-	pIdlePCB->m_pid = gPID++;
-	pIdlePCB->m_ppid = pInitPCB->m_pid;		// for now this is its own parent
-	pIdlePCB->m_pt = pIdlePT;
-	pIdlePCB->m_uctx = pIdleUC;
-	pIdlePCB->m_kctx = NULL;
-	pIdlePCB->m_state = PROCESS_READY;
-	pIdlePCB->m_ticks = 0;					// 0 for now.
-	pIdlePCB->m_timeToSleep = 0;
-	pIdlePCB->m_next = NULL;
-	pIdlePCB->m_prev = NULL;
-	pIdlePCB->m_edQ = idleEDQ;
-	pInitPCB->m_iodata = NULL;
+	pIdlePCB->m_pid 		= gPID++;
+	pIdlePCB->m_ppid 		= pInitPCB->m_pid;		// for now this is its own parent
+	pIdlePCB->m_pagetable 	= pIdlePT;
+	pIdlePCB->m_uctx 		= pIdleUC;
+	pIdlePCB->m_kctx 		= NULL;
+	pIdlePCB->m_state 		= PROCESS_READY;
+	pIdlePCB->m_ticks 		= 0;					// 0 for now.
+	pIdlePCB->m_timeToSleep	= 0;
+	pIdlePCB->m_next 		= NULL;
+	pIdlePCB->m_prev 		= NULL;
+	pIdlePCB->m_edQ 		= idleEDQ;
+	pInitPCB->m_iodata 		= NULL;
 
 	// reset to idle's pagetables for successfulyl loading
-	swapPageTable(pIdlePCB);
+	setR1PageTableAlone(pIdlePCB);
 
 	char idleprog[] = "idle";
 	char* tempargs[] = {NULL};
@@ -590,7 +588,13 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	}
 	else
 	{
-		//KernelContextSwitch(MyKCS, pIdlePCB, NULL);
+		int rc = KernelContextSwitch(GetKCS, pIdlePCB, NULL);
+		if(rc == -1)
+		{
+			TracePrintf(0, "ERROR: Unable to get the first kernel context and stack frames\n");
+			uctx = NULL;
+			return;
+		}
 	}
 
 	// add this to ready to run queue

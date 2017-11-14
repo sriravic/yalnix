@@ -22,3 +22,9 @@ yalnix/src/testlock
 yalnix/src/testmath
 yalnix/src/testpipe
 yalnix/src/testterminal
+yalnix/src/TRACE
+yalnix/src/TTYLOG
+yalnix/src/TTYLOG.0
+yalnix/src/TTYLOG.1
+yalnix/src/TTYLOG.2
+yalnix/src/TTYLOG.3

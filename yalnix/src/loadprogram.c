@@ -7,7 +7,6 @@
 #include <yalnix.h>
 #include <yalnixutils.h>
 
-
 extern FrameTableEntry gFreeFramePool;
 extern FrameTableEntry gUsedFramePool;
 
@@ -152,7 +151,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     * program into memory.  Get the right number of physical pages
     * allocated, and set them all to writable.
     */
-    PageTable* pt = pcb->m_pt;
+    UserProgPageTable* pt = pcb->m_pagetable;
 
     //Throw away the old region 1 virtual address space of the
     // curent process by freeing
@@ -174,8 +173,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // (PROT_READ | PROT_WRITE).
     int pg;
     int allocPages = 0;
-    unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
-    for(pg = text_pg1 + r1offset; pg < NUM_VPN && allocPages < li.t_npg; pg++)
+    for(pg = text_pg1; pg < NUM_VPN && allocPages < li.t_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -189,7 +187,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a protection of
     // (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = data_pg1 + r1offset; pg < NUM_VPN && allocPages < data_npg; pg++)
+    for(pg = data_pg1; pg < NUM_VPN && allocPages < data_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -209,7 +207,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a
     // protection of (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = NUM_VPN - 1; pg > r1offset && allocPages < stack_npg; pg--)
+    for(pg = gR1Pages - 1; pg > 0 && allocPages < stack_npg; pg--)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -265,7 +263,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // invalidate their entries in the TLB or write the updated entries
     // into the TLB.  It's nice for the TLB and the page tables to remain
     // consistent.
-    for(pg = r1offset; pg < r1offset + li.t_npg; pg++)
+    for(pg = 0; pg < li.t_npg; pg++)
     {
         pt->m_pte[pg].prot = PROT_READ | PROT_EXEC;
     }
