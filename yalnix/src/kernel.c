@@ -602,10 +602,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(statusCode != SUCCESS)
 	{
 		TracePrintf(0, "Error loading the idle process\n");
-		exit(-1);
+		uctx = NULL;
+		return;
 	}
 	else
 	{
+		// add this to ready to run queue
+		processEnqueue(&gReadyToRunProcessQ, pIdlePCB);
+
 		int rc = KernelContextSwitch(GetKCS, pIdlePCB, NULL);
 		if(rc == -1)
 		{
@@ -613,11 +617,20 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			uctx = NULL;
 			return;
 		}
+		else
+		{
+			// We might have waken up as another process here
+			// just to make sure check what the current running PCB is
+			PCB* myownpcb = getHeadProcess(&gRunningProcessQ);
+			if(myownpcb->m_pid != 0)
+			{
+				TracePrintf(0, "Hurray I am alive.\n");
+				swapPageTable(myownpcb);
+				uctx->pc = myownpcb->m_uctx->pc;
+				uctx->sp = myownpcb->m_uctx->sp;
+			}
+		}
 	}
-
-	// add this to ready to run queue
-	processEnqueue(&gReadyToRunProcessQ, pIdlePCB);
-
 	// Reset to init's page tables
 	swapPageTable(pInitPCB);
 
