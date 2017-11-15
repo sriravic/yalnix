@@ -166,9 +166,9 @@ typedef struct PipeReadWaitQueue PipeReadWaitQueue;
 
 void pipeEnqueue(int id);
 int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb, void* buff);
-Pipe* getPipeNode(int id);
+PipeQueueNode* getPipeNode(int id);
 void processPendingPipeReadRequests();
-int freePipe(int id);
+int freePipe(PipeQueueNode* pipeNode);
 
 // Globally defined pipes
 extern LockQueue gLockQueue;			// the global lock queue

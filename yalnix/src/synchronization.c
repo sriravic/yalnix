@@ -347,7 +347,7 @@ void pipeEnqueue(int uid)
 
 }
 
-Pipe* getPipeNode(int uid)
+PipeQueueNode* getPipeNode(int uid)
 {
     PipeQueueNode* curr = gPipeQueue.m_head;
     PipeQueueNode* next = curr;
@@ -357,7 +357,7 @@ Pipe* getPipeNode(int uid)
     }
     while(next != NULL)
     {
-        if(curr->m_pipe->m_id == uid) return curr->m_pipe;
+        if(curr->m_pipe->m_id == uid) return curr;
         else
         {
             curr = next;
@@ -405,9 +405,10 @@ void processPendingPipeReadRequests()
     {
         do {
             int pipeid = node->m_id;
-            Pipe* pipe = getPipeNode(pipeid);
-            if(pipe != NULL)
+            PipeQueueNode* pipeNode = getPipeNode(pipeid);
+            if(pipeNode != NULL)
             {
+                Pipe* pipe = pipeNode->m_pipe;
                 int requested = node->m_len;
                 int available = pipe->m_validLength;
                 if(requested <= available)
@@ -435,7 +436,7 @@ void processPendingPipeReadRequests()
     }
 }
 
-int freePipe(int id)
+int freePipe(PipeQueueNode* pipeNode)
 {
     return -1;
 }

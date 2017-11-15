@@ -661,14 +661,15 @@ int kernelPipeInit(int *pipe_idp)
 int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead)
 {
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    Pipe* p = getPipeNode(pipe_id);
-    if(p == NULL)
+    PipeQueueNode* pipeNode = getPipeNode(pipe_id);
+    if(pipeNode == NULL)
     {
         TracePrintf(0, "ERROR: Invalid pipe id provided\n");
         return ERROR;
     }
     else
     {
+        Pipe* p = pipeNode->m_pipe;
         if(len <= p->m_validLength)
         {
             // request served immediately
@@ -687,14 +688,15 @@ int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead)
 
 int kernelPipeWrite(int pipe_id, void *buf, int len)
 {
-	Pipe* p = getPipeNode(pipe_id);
-    if(p == NULL)
+	PipeQueueNode* pipeNode = getPipeNode(pipe_id);
+    if(pipeNode == NULL)
     {
         TracePrintf(0, "ERROR: Invalid pipe id provided\n");
         return ERROR;
     }
     else
     {
+        Pipe* p = pipeNode->m_pipe;
         if(p->m_validLength == 0)
         {
             // the first time this is called
@@ -991,13 +993,13 @@ int kernelReclaim(int id) {
         // SANDY: I think getPipeNode should return a pipe node, not a pipe.
         // Then, freePipe can take the node as an argument and free the resources directly
         // instead of finding the pipe node again.
-        Pipe* p = getPipeNode(id);
+        PipeQueueNode* p = getPipeNode(id);
         if(p == NULL)
         {
             TracePrintf(0, "ERROR: Invalid syscall to free a non-existent pipe\n");
             return ERROR;
         }
         else
-            return freePipe(id);
+            return freePipe(p);
     }
 }
