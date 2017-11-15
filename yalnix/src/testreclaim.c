@@ -2,10 +2,11 @@
 
 int main(int argc, char** argv)
 {
-    int cvar_rc, lock_rc;
+    int cvar_rc, lock_rc, pipe_rc;
     int n = 4;
     int cvars[n];
     int locks[n];
+    int pipes[n];
 
     // populate the arrays
     int i, j;
@@ -13,7 +14,8 @@ int main(int argc, char** argv)
     {
         cvar_rc = CvarInit(&cvars[i]);
         lock_rc = LockInit(&locks[i]);
-        if(cvar_rc == ERROR || lock_rc == ERROR)
+        pipe_rc = PipeInit(&pipes[i]);
+        if(cvar_rc == ERROR || lock_rc == ERROR || pipe_rc)
         {
             exit(-1);
         }
@@ -23,11 +25,13 @@ int main(int argc, char** argv)
     for(i = n-1; i < 2*n-1; i++)
     {
         j = i%n;
-        TracePrintf(0, "Iteration %d, pos %d, reclaiming cvar %d and lock %d.\n", i-n+1, j, cvars[j], locks[j]);
+        TracePrintf(0, "Iteration %d, pos %d, reclaiming cvar %d, lock %d, and pipe %d.\n", i-n+1, j, cvars[j], locks[j], pipes[j]);
         cvar_rc = Reclaim(cvars[j]);
         lock_rc = Reclaim(locks[j]);
-        if(lock_rc == ERROR)
+        pipe_rc = Reclaim(pipes[j]);
+        if(cvar_rc == ERROR || lock_rc == ERROR || pipe_rc == ERROR)
         {
+            TracePrintf(0, "Error codes: cvar: %d, lock: %d, pipe: %d.\n", cvar_rc, lock_rc, pipe_rc);
             exit(-1);
         }
     }

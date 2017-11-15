@@ -772,7 +772,7 @@ int kernelAcquire(int lock_id, UserContext* ctx)
         return ERROR;
     }
 
-    Lock* lock = lockNode->m_pLock;
+    Lock* lock = lockNode->m_lock;
     if(lock->m_state == UNLOCKED)
     {
         // if the lock is free, update the lock's holder and continue running
@@ -818,7 +818,7 @@ int kernelRelease(int lock_id) {
         // if the lock doesn't exist, return ERROR
         return ERROR;
     }
-    Lock* lock = lockNode->m_pLock;
+    Lock* lock = lockNode->m_lock;
 
     if(lockNode->m_holder != currPCB->m_pid)
     {
@@ -909,11 +909,11 @@ int kernelCvarWait(int cvar_id, int lock_id, UserContext* ctx)
     }
 
     // update the cvars lock id on the first time ONLY, else throw an ERROR
-    if(cvarNode->m_pCVar->m_lockId == -1)
+    if(cvarNode->m_cvar->m_lockId == -1)
     {
-        cvarNode->m_pCVar->m_lockId = lock_id;
+        cvarNode->m_cvar->m_lockId = lock_id;
     }
-    else if(cvarNode->m_pCVar->m_lockId != lock_id)
+    else if(cvarNode->m_cvar->m_lockId != lock_id)
     {
         return ERROR;
     }
@@ -990,16 +990,19 @@ int kernelReclaim(int id) {
     }
     else if(t == SYNC_PIPE)
     {
-        // SANDY: I think getPipeNode should return a pipe node, not a pipe.
-        // Then, freePipe can take the node as an argument and free the resources directly
-        // instead of finding the pipe node again.
-        PipeQueueNode* p = getPipeNode(id);
-        if(p == NULL)
+        PipeQueueNode* pipeNode = getPipeNode(id);
+        if(pipeNode == NULL)
         {
             TracePrintf(0, "ERROR: Invalid syscall to free a non-existent pipe\n");
             return ERROR;
         }
         else
-            return freePipe(p);
+        {
+            return freePipe(pipeNode);
+        }
+    }
+    else
+    {
+        return ERROR;
     }
 }
