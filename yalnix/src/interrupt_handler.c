@@ -66,7 +66,7 @@ void interruptKernel(UserContext* ctx)
 			{
 				TracePrintf(2, "Process exited\n");
 				int status = ctx->regs[0];	// figure out how to get the real status
-				kernelExit(status);
+				kernelExit(status, ctx);
 			}
 		break;
         case YALNIX_WAIT:
@@ -327,6 +327,7 @@ void interruptClock(UserContext* ctx)
 	TracePrintf(3, "TRAP_CLOCK\n");
 
 	scheduleSleepingProcesses();
+	freeExitedProcesses();			// free the resources associated with exited processes
 
 	// update the quantum of runtime for the current running process
 	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -444,6 +445,7 @@ void interruptMemory(UserContext* ctx)
 // Interrupt handler for math traps
 void interruptMath(UserContext* ctx)
 {
+	/*
 	// check the status of the register for what caused this math traps
 	// report to user and abort the process
 	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
@@ -485,6 +487,7 @@ void interruptMath(UserContext* ctx)
 	free(currPCB->m_kctx);
 	free(currPCB->m_pt);
 	free(currPCB);
+	*/
 }
 
 // Interrupt Handler for terminal recieve

@@ -50,6 +50,7 @@ PCBQueue gReadBlockedQ;
 PCBQueue gReadFinishedQ;
 PCBQueue gWriteBlockedQ;
 PCBQueue gWriteFinishedQ;
+PCBQueue gExitedQ;
 
 // The global synchronization queues
 LockQueue gLockQueue;
@@ -412,6 +413,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	INIT_QUEUE_HEADS(gReadFinishedQ);
 	INIT_QUEUE_HEADS(gWriteBlockedQ);
 	INIT_QUEUE_HEADS(gWriteFinishedQ);
+	INIT_QUEUE_HEADS(gExitedQ);
 
 	// create initial synchronization queues
 	INIT_QUEUE_HEADS(gLockQueue);

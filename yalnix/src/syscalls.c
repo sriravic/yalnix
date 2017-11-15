@@ -445,10 +445,10 @@ int kernelExec(char *name, char **args)
 }
 
 // Exit terminates the calling process
-void kernelExit(int status)
+void kernelExit(int status, UserContext* ctx)
 {
-    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-    if(currPCB->m_pid == 0)
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    if(currpcb->m_pid == 0)
     {
         // If init exits, halt the system
         TracePrintf(0, "INIT EXITED SO HALTING THE SYSTEM\n");
@@ -457,39 +457,42 @@ void kernelExit(int status)
 
     // get the parent PCB of the calling process if it exists
     // TODO also need to search all lock waiting, cvar waiting, and ttyread waiting queues
-    PCB* parentPCB = getPcbByPid(&gReadyToRunProcessQ, currPCB->m_ppid);
-    if(parentPCB == NULL)
+    PCB* parentpcb = getPcbByPid(&gReadyToRunProcessQ, currpcb->m_ppid);
+    if(parentpcb == NULL)
     {
-        parentPCB = getPcbByPid(&gSleepBlockedQ, currPCB->m_ppid);
+        parentpcb = getPcbByPid(&gSleepBlockedQ, currpcb->m_ppid);
     }
-    if(parentPCB == NULL)
+    if(parentpcb == NULL)
     {
-        parentPCB = getPcbByPid(&gWaitProcessQ, currPCB->m_ppid);
+        parentpcb = getPcbByPid(&gWaitProcessQ, currpcb->m_ppid);
     }
 
     // if the process has a parent, save its exit data into its parents list
-    if(parentPCB != NULL)
+    if(parentpcb != NULL)
     {
         // create the exit data struct
         ExitData* exitData = (ExitData*)malloc(sizeof(ExitData));
         if(exitData == NULL)
         {
             TracePrintf(0, "Failed to malloc for exit data\n");
-            return;
+            // serious issue- the machine has no memory left so we have to halt since we cannot return
+            Halt();
         }
         exitData->m_status = status;
-        exitData->m_pid = currPCB->m_pid;
+        exitData->m_pid = currpcb->m_pid;
 
         // put the exit data into the parents exit data queue
-        exitDataEnqueue(parentPCB->m_edQ, exitData);
+        exitDataEnqueue(parentpcb->m_edQ, exitData);
     }
 
-    // free the pcb
-    // TODO check that freePCB is up to date with any new stuff we added
-    freePCB(currPCB);
+    // move the pcb to the terminated queue so that the kernel can free it later
+    processDequeue(&gRunningProcessQ);
+    processEnqueue(&gExitedQ, currpcb);
 
     // half context switch because we will never come back
-
+    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+    KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 }
 
 // Wait

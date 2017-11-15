@@ -5,7 +5,7 @@
 
 extern int kernelFork(void);
 extern int kernelExec(char *filename, char **argvec);
-extern void kernelExit(int status);
+extern void kernelExit(int status, UserContext* ctx);
 extern int kernelWait(int *status_ptr, UserContext* ctx);
 extern int kernelGetPid(void);
 extern int kernelBrk(void *addr);
