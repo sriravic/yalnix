@@ -493,36 +493,35 @@ void interruptMath(UserContext* ctx)
 // Interrupt Handler for terminal recieve
 void interruptTtyReceive(UserContext* ctx)
 {
-	/*
 	int tty_id = ctx->code;
-
 	// put the current running process into ready to run queues
 	PCB* currpcb = processDequeue(&gRunningProcessQ);
 	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 	processEnqueue(&gReadyToRunProcessQ, currpcb);
 
 	// pick the process that was doing a service requests
-	TerminalRequest* head = &gTermWReqHeads[tty_id];
+	TerminalRequest* head = &gTermRReqHeads[tty_id];
 	TerminalRequest* req = head->m_next;
 	if(req != NULL)
 	{
+		// read the bytes First
+		int read = TtyReceive(tty_id, req->m_bufferR0, TERMINAL_MAX_LINE);
+		req->m_serviced = read;
 		PCB* nextpcb = req->m_pcb;
 		int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 		if(rc == -1)
 		{
 			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
 		}
-
-		// THis process which called the terminal process to push text to terminal
-		// wakes up here again. We put ourselves again in running queue
-		processRemove(&gReadyToRunProcessQ, currpcb);
-		processEnqueue(&gRunningProcessQ, currpcb);
-		memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-		return;
 	}
 
-	processOutstandingReadRequests(tty_id);
-	*/
+	// THis process which called the terminal process to push text to terminal
+	// wakes up here again. We put ourselves again in running queue
+	processRemove(&gReadyToRunProcessQ, currpcb);
+	processEnqueue(&gRunningProcessQ, currpcb);
+	swapPageTable(currpcb);
+	memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+	return;
 }
 
 // Interrupt Handler for terminal transmit
@@ -545,15 +544,16 @@ void interruptTtyTransmit(UserContext* ctx)
 		{
 			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
 		}
-
-		// THis process which called the terminal process to push text to terminal
-		// wakes up here again. We put ourselves again in running queue
-		processRemove(&gReadyToRunProcessQ, currpcb);
-		processEnqueue(&gRunningProcessQ, currpcb);
-		swapPageTable(currpcb);
-		memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-		return;
 	}
+
+	// THis process which called the terminal process to push text to terminal
+	// wakes up here again. We put ourselves again in running queue
+	processRemove(&gReadyToRunProcessQ, currpcb);
+	processEnqueue(&gRunningProcessQ, currpcb);
+	swapPageTable(currpcb);
+	currpcb->m_ticks = 0;
+	memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+	return;
 }
 
 // This is a dummy interrupt handler that does nothing.

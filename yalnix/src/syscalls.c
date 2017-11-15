@@ -681,17 +681,82 @@ int kernelDelay(int clock_ticks)
     }
 }
 
-// TTYRead reads from the terminal tty_id
+// Reads from a terminal
+// returns the number of bytes read from the terminal
+// we use -1 for error bytes read
 int kernelTtyRead(int tty_id, void *buf, int len)
 {
-	// Move the calling process to the gIOBlocked list
-	// Wait for an interruptTtyReceive trap
-		// When one is received, copy len bytes into buf
-		// Check for clean data
-	// Move the calling process from the gIOBlocked list to the gReadyToRun list
-    //return the number of bytes copied into
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    return SUCCESS;
+    int read = -1;
+    TerminalRequest* head = &gTermRReqHeads[tty_id];
+
+    // find the first empty slot
+    TerminalRequest* curr = head;
+    TerminalRequest* next = curr->m_next;
+    while(next != NULL)
+    {
+        curr = next;
+        next = curr->m_next;
+    }
+
+    // create the new entry for this request
+    TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
+    if(req != NULL)
+    {
+        req->m_code = TERM_REQ_READ;
+        req->m_pcb = currpcb;
+        req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
+        req->m_bufferR1 = buf;
+        req->m_next = NULL;
+        if(req->m_bufferR0 != NULL)
+        {
+            // append the request to the queue of request
+            curr->m_next = req;
+            req->m_len = len;
+            req->m_serviced = 0;
+            req->m_remaining = len;
+            req->m_next = NULL;
+
+            // context switch and wait for a receive to happen
+            processRemove(&gRunningProcessQ, currpcb);
+            processEnqueue(&gReadBlockedQ, currpcb);
+            PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+
+                // remove this node from gTermWReqHeads queue
+                if(removeTerminalRequest(tty_id, req) != 0)
+                {
+                    TracePrintf(1, "ERROR: Removing the request failed\n");
+                }
+                processRemove(&gReadBlockedQ, currpcb);
+                processEnqueue(&gRunningProcessQ, currpcb);
+                swapPageTable(currpcb);
+                return -1;
+            }
+
+            // we just got awoke
+            // req->serviced would be set by the interrupt in read
+            processRemove(&gReadBlockedQ, currpcb);
+            processEnqueue(&gRunningProcessQ, currpcb);
+            swapPageTable(currpcb);
+
+            // copy back the stuff into user mode space
+            memcpy(req->m_bufferR1, req->m_bufferR0, req->m_serviced);
+            }
+    }
+    else
+    {
+        TracePrintf(0, "ERROR: Unable to allocate memory for read request\n");
+        return -1;
+    }
+
+    read = req->m_serviced;
+    if(removeTerminalRequest(tty_id, req) != 0)
+        TracePrintf(1, "ERROR: Removing the request failed\n");
+    return read;
 }
 
 // TTYWrite writes to the terminal tty_id
