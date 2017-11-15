@@ -131,7 +131,7 @@ void freeRegionOneFrames(PCB* pcb)
 
     // invalidate all the pages for region 1
     // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
-    for(pageNumber = NUM_VPN >> 1; pageNumber < NUM_VPN; pageNumber++)
+    for(pageNumber = 0; pageNumber < gNumPagesR1; pageNumber++)
     {
         if(pt->m_pte[pageNumber].valid == 1)
         {

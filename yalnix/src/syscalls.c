@@ -147,12 +147,12 @@ int kernelExec(char *name, char **args)
 {
     // Get the pcb of the calling process
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    PageTable* currpt = currpcb->m_pt;
+    UserProgPageTable* currpt = currpcb->m_pagetable;
 
     if(currpcb != NULL && currpt != NULL)
     {
         // clear some entries in the pcb
-        currpcb->m_state = PROCESS_READY;
+        currpcb->m_state = PROCESS_RUNNING;
         currpcb->m_ticks = 0;
         currpcb->m_timeToSleep = 0;
 
@@ -291,7 +291,7 @@ int kernelExec(char *name, char **args)
          * program into memory.  Get the right number of physical pages
          * allocated, and set them all to writable.
          */
-         PageTable* pt = currpt;
+         UserProgPageTable* pt = currpt;
 
          // invalidate all the pages for region 1
          // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
@@ -301,10 +301,9 @@ int kernelExec(char *name, char **args)
          // the "text_pg1" page in region 1 address space.
          // These pages should be marked valid, with a protection of
          // (PROT_READ | PROT_WRITE).
-         int allocPages = 0;
          int pg;
-         unsigned int r1offset = (VMEM_1_BASE) / PAGESIZE;
-         for(pg = text_pg1 + r1offset; pg < NUM_VPN && allocPages < li.t_npg; pg++)
+         int allocPages = 0;
+         for(pg = text_pg1; pg < gNumPagesR1 && allocPages < li.t_npg; pg++)
          {
              pt->m_pte[pg].valid = 1;
              pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -318,7 +317,7 @@ int kernelExec(char *name, char **args)
          // These pages should be marked valid, with a protection of
          // (PROT_READ | PROT_WRITE).
          allocPages = 0;
-         for(pg = data_pg1 + r1offset; pg < NUM_VPN && allocPages < data_npg; pg++)
+         for(pg = data_pg1; pg < gNumPagesR1 && allocPages < data_npg; pg++)
          {
              pt->m_pte[pg].valid = 1;
              pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -328,7 +327,7 @@ int kernelExec(char *name, char **args)
          }
 
          // set the brk of the heap to be the base address of the next page above datasegment
-         currpcb->m_brk = pg * PAGESIZE;
+         currpcb->m_brk = (pg + gNumPagesR0) * PAGESIZE;
 
          /*
          * Allocate memory for the user stack too.
@@ -338,7 +337,7 @@ int kernelExec(char *name, char **args)
          // These pages should be marked valid, with a
          // protection of (PROT_READ | PROT_WRITE).
          allocPages = 0;
-         for(pg = NUM_VPN - 1; pg > r1offset && allocPages < stack_npg; pg--)
+         for(pg = R1PAGES - 1; pg > 0 && allocPages < stack_npg; pg--)
          {
              pt->m_pte[pg].valid = 1;
              pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -396,7 +395,7 @@ int kernelExec(char *name, char **args)
          // invalidate their entries in the TLB or write the updated entries
          // into the TLB.  It's nice for the TLB and the page tables to remain
          // consistent.
-         for(pg = r1offset; pg < r1offset + li.t_npg; pg++)
+         for(pg = 0; pg < li.t_npg; pg++)
          {
              pt->m_pte[pg].prot = PROT_READ | PROT_EXEC;
          }
@@ -440,6 +439,10 @@ int kernelExec(char *name, char **args)
          // reset the pagetables to the calling process
          WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
          return SUCCESS;
+    }
+    else
+    {
+        return ERROR;
     }
 }
 
