@@ -370,6 +370,12 @@ void interruptKernel(UserContext* ctx)
 			ctx->regs[0] = rc;
 		}
 		break;
+		case YALNIX_RECLAIM:
+		{
+			int id = ctx->regs[0];
+			ctx->regs[0] = kernelReclaim(id);
+		}
+		break;
 	}
 }
 

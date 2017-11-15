@@ -88,7 +88,7 @@ int createLock(int pid)
 
 // to be implemented when we write kernelReclaim
 int freeLock(LockQueueNode* lockNode){
-    return -1;
+    return SUCCESS;
 }
 
 /***** CVar functions *****/
@@ -144,8 +144,35 @@ int removeCVarNode(CVarQueueNode* cvarNode)
         cvarNode->m_pNext = NULL;
         return SUCCESS;
     }
-    //CVarQueueNode* currNode = gCVarQueue->m_head;
-    // TODO
+    else if(cvarNode == gCVarQueue.m_head)
+    {
+        // removing the head
+        gCVarQueue.m_head = cvarNode->m_pNext;
+        cvarNode->m_pNext = NULL;
+        return SUCCESS;
+    }
+    else
+    {
+        // normal case
+        CVarQueueNode* currNode = gCVarQueue.m_head;
+        while(currNode->m_pNext != NULL)
+        {
+            if(currNode->m_pNext == cvarNode)
+            {
+                // patch up the LL and return
+                currNode->m_pNext = currNode->m_pNext->m_pNext;
+                cvarNode->m_pNext = NULL;
+                if(cvarNode == gCVarQueue.m_tail)
+                {
+                    gCVarQueue.m_tail = NULL;
+                }
+                return SUCCESS;
+            }
+            currNode = currNode->m_pNext;
+        }
+    }
+    // not found
+    return ERROR;
 }
 
 int createCVar(int pid)
@@ -192,8 +219,11 @@ int freeCVar(CVarQueueNode* cvarNode) // to be implemented when we write kernelR
         // still processes waiting so return Error
         return ERROR;
     }
-    // TODO
-
+    removeCVarNode(cvarNode);
+    free(cvarNode->m_waitingQueue);
+    free(cvarNode->m_pCVar);
+    free(cvarNode);
+    return SUCCESS;
 }
 
 /***** utility functions *****/
@@ -217,8 +247,8 @@ SyncType getSyncType(int compoundId)
 {
     int type = (compoundId & 0x30000000) >> SYNC_SHIFT;
     if(type == 1) return SYNC_LOCK;
-    else if(type == 2) return SYNC_PIPE;
-    else if(type == 3) return SYNC_CVAR;
+    else if(type == 2) return SYNC_CVAR;
+    else if(type == 3) return SYNC_PIPE;
     else
     {
         TracePrintf(0, "ERROR: Invalid Sync Type\n");

@@ -13,7 +13,7 @@ Description: Contains the synchronization primitives provided by yalnix to the u
 #define LOCK_MASK 0x10000000			// we use a value of 1 for locks
 #define CVAR_MASK 0x20000000			// we use a value of 2 for cvars
 #define PIPE_MASK 0x30000000			// we use a value of 3 for pipes
-#define SYNC_SHIFT 30					// number of bits to shift to get the bits of the synchronization primitive
+#define SYNC_SHIFT 28					// number of bits to shift to get the bits of the synchronization primitive
 
 #define LOCKED 1
 #define UNLOCKED 0
