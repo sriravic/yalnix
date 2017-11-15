@@ -67,53 +67,13 @@ void interruptKernel(UserContext* ctx)
 				TracePrintf(2, "Process exited\n");
 				int status = ctx->regs[0];	// figure out how to get the real status
 				kernelExit(status);
-
-				// exit happened, so we context switch
-				TracePrintf(2, "Process exited\n");
-				// do a context switch here
-				// Remove the process from the running queue
-				PCB* currPCB = processDequeue(&gRunningProcessQ);
-				PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
-
-				nextPCB->m_ticks = 0;
-				if(nextPCB != NULL)
-				{
-					int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
-					if(rc == -1)
-					{
-						TracePrintf(0, "Context switch failed");
-					}
-
-					processEnqueue(&gRunningProcessQ, nextPCB);
-					swapPageTable(nextPCB);
-					memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-					return;
-				}
-				else
-				{
-					TracePrintf(0, "Error: No process to run.!!\n");
-				}
-
-				// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 stack pages
-				freePCB(currPCB);
 			}
 		break;
         case YALNIX_WAIT:
             {
                 // try to find some other process to run in its place
-				int status;
-				int child_pid = kernelWait(&status);
-				if(getHeadProcess(&gRunningProcessQ) == NULL)
-				{
-					// waiting happened, so we context switch
-					TracePrintf(2, "Process waiting for a child to exit\n");
-					// TODO wait context switch
-				}
-				else
-				{
-					TracePrintf(2, "Process %d exited w/ status %d so I don't have to wait.\n", child_pid, status);
-				}
-				ctx->regs[0] = (u_long)child_pid;
+				int *status_ptr = (int*)ctx->regs[0];
+				ctx->regs[0] = kernelWait(status_ptr, ctx);
             }
         break;
         case YALNIX_BRK:

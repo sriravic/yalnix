@@ -456,6 +456,7 @@ void kernelExit(int status)
     }
 
     // get the parent PCB of the calling process if it exists
+    // TODO also need to search all lock waiting, cvar waiting, and ttyread waiting queues
     PCB* parentPCB = getPcbByPid(&gReadyToRunProcessQ, currPCB->m_ppid);
     if(parentPCB == NULL)
     {
@@ -474,7 +475,7 @@ void kernelExit(int status)
         if(exitData == NULL)
         {
             TracePrintf(0, "Failed to malloc for exit data\n");
-            exit(-1);
+            return;
         }
         exitData->m_status = status;
         exitData->m_pid = currPCB->m_pid;
@@ -482,17 +483,25 @@ void kernelExit(int status)
         // put the exit data into the parents exit data queue
         exitDataEnqueue(parentPCB->m_edQ, exitData);
     }
+
+    // free the pcb
+    // TODO check that freePCB is up to date with any new stuff we added
+    freePCB(currPCB);
+
+    // half context switch because we will never come back
+
 }
 
 // Wait
-int kernelWait(int *status_ptr) {
-    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-    ExitData* exitData = exitDataDequeue(currPCB->m_edQ);
+int kernelWait(int *status_ptr, UserContext* ctx) {
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    ExitData* exitData = exitDataDequeue(currpcb->m_edQ);
     // find if the running process has children by trawling the process queues
     bool hasChildProcess =
-        getChildOfPpid(&gReadyToRunProcessQ, currPCB->m_pid) != NULL ||
-        getChildOfPpid(&gWaitProcessQ, currPCB->m_pid) != NULL ||
-        getChildOfPpid(&gSleepBlockedQ, currPCB->m_pid) != NULL;
+        getChildOfPpid(&gReadyToRunProcessQ, currpcb->m_pid) != NULL ||
+        getChildOfPpid(&gWaitProcessQ, currpcb->m_pid) != NULL ||
+        getChildOfPpid(&gSleepBlockedQ, currpcb->m_pid) != NULL;
+        // TODO also need to search all lock waiting, cvar waiting, and ttyread waiting queues
 
     if (!hasChildProcess && exitData == NULL)
     {
@@ -500,11 +509,59 @@ int kernelWait(int *status_ptr) {
         *status_ptr = -1;
         return ERROR;
     }
+
+    // temp code start
+    // I think the while loop should only get run once ever. My thought here is that
+    // if for some reason a process gets woken up erroneously, it will just go back to sleep.
+    while(exitData == NULL)
+    {
+        TracePrintf(2, "Process waiting for a child to exit\n");
+
+        // ******SCHEDULER******
+        // no exited children but running children, so move it to gWaitProcessQ and context switch
+        processDequeue(&gRunningProcessQ);
+        processEnqueue(&gWaitProcessQ, currpcb);
+
+        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(0, "Kernel Context switch failed\n");
+            exit(-1);
+        }
+        processRemove(&gReadyToRunProcessQ, currpcb);
+        processEnqueue(&gRunningProcessQ, currpcb);
+        currpcb->m_ticks = 0;
+
+        // swap out the page tables
+        swapPageTable(currpcb);
+        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+        // ******SCHEDULER******
+
+        // when this process picks up again, it should have a new exit data to return
+        // if for some strange reason it does not, then the loop will run again
+        exitData = exitDataDequeue(currpcb->m_edQ);
+    }
+
+    // success
+    TracePrintf(2, "Process successfully got a child's exit data.\n");
+    *status_ptr = exitData->m_status;
+    int pid = exitData->m_pid;
+    free(exitData);
+    return pid;
+
+    // temp code end
+    /*
     else if (exitData == NULL)
     {
         // no exited children but running children, so move it to gWaitProcessQ
         processEnqueue(&gWaitProcessQ, currPCB);
         processDequeue(&gRunningProcessQ);
+        // TODO, context switch here instead
+
+        // when this process picks up again, it should have a new exit data to returns
+        exitData = exitDataDequeue(currPCB->m_edQ);
         *status_ptr = -1;
         return ERROR;   // not sure what to return in this case
     }
@@ -514,6 +571,7 @@ int kernelWait(int *status_ptr) {
         *status_ptr = exitData->m_status;
         return exitData->m_pid;
     }
+    */
 }
 
 int kernelGetPid(void) {
