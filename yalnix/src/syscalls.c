@@ -13,6 +13,9 @@
 extern int gPID;
 extern void* gTerminalBuffer[NUM_TERMINALS];
 
+extern KernelContext* GetKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
+extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
+
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
 {
@@ -20,13 +23,12 @@ int kernelFork(void)
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     PCB* nextpcb = (PCB*)malloc(sizeof(PCB));
     memset(nextpcb, 0, sizeof(PCB));
-    PageTable* nextpt = (PageTable*)malloc(sizeof(PageTable));
-    memset(nextpt, 0, sizeof(PageTable));
-    PageTable* currpt = currpcb->m_pt;
+    UserProgPageTable* nextpt = (UserProgPageTable*)malloc(sizeof(UserProgPageTable));
+    memset(nextpt, 0, sizeof(UserProgPageTable));
+    UserProgPageTable* currpt = currpcb->m_pagetable;
     UserContext* nextuctx = (UserContext*)malloc(sizeof(UserContext));
-    KernelContext* nextkctx = (KernelContext*)malloc(sizeof(KernelContext));
 
-    if(nextpcb != NULL && nextpt != NULL && nextuctx != NULL /*&& nextkctx != NULL*/)
+    if(nextpcb != NULL && nextpt != NULL && nextuctx != NULL)
     {
         // initialize this pcb
         nextpcb->m_pid = gPID++;
@@ -34,47 +36,11 @@ int kernelFork(void)
         nextpcb->m_state = PROCESS_READY;
         nextpcb->m_ticks = 0;
         nextpcb->m_timeToSleep = 0;
-        nextpcb->m_pt = nextpt;
+        nextpcb->m_pagetable = nextpt;
         nextpcb->m_brk = currpcb->m_brk;
         memcpy(nextuctx, currpcb->m_uctx, sizeof(UserContext));
-        //memcpy(nextkctx, currpcb->m_kctx, sizeof(KernelContext));
         nextpcb->m_uctx = nextuctx;
-        nextpcb->m_kctx = nextkctx;
-
-        // copy the entries of the region 0 up to kernel stack size
         int pg;
-        int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
-        int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
-        int r1Pages = DOWN_TO_PAGE(VMEM_LIMIT) / PAGESIZE;
-        for(pg = 0; pg < r0kernelPages; pg++)
-        {
-            // copy r0 pages if only they are valid
-            // plus they point to the same physical frames in memory
-            // we don't copy the contents into new frames since all processes
-            // share the same kernel r0 address space
-            if(currpt->m_pte[pg].valid == 1)
-            {
-                nextpt->m_pte[pg].valid = 1;
-                nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                nextpt->m_pte[pg].pfn = currpt->m_pte[pg].pfn;
-            }
-        }
-
-        // add two pages for kernel stack since they are unique to each process.
-        for(pg = r0kernelPages; pg < r0StackPages; pg++)
-        {
-            FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-            if(frame != NULL)
-            {
-                nextpt->m_pte[pg].valid = 1;
-                nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
-                nextpt->m_pte[pg].pfn = frame->m_frameNumber;
-            }
-            else
-            {
-                TracePrintf(0, "Error allocating physical frames for the region0 of forked process");
-            }
-        }
 
         // Now process each region1 page
         // We first allocate one temporary page in R0
@@ -82,15 +48,18 @@ int kernelFork(void)
         // we swap out the address space of the page tables of R1
         // we then copy from R0 page -> R1(child)
         // we repeat this process till we have copied all the pages appropriately
-        unsigned int kernelBrk = (unsigned int)gKernelBrk;
-        unsigned int kernelBrkPage = kernelBrk / PAGESIZE;
 
+        // NOTE: The current fork might cause error when we are constructing the whole page table and frames
+        //       We will have to undo the whole operation if we are not able to make the whole state valid
+
+        // use the one page below the kernel stack for the temporary storage
         FrameTableEntry* temporary = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-        currpt->m_pte[kernelBrkPage].valid = 1;
-        currpt->m_pte[kernelBrkPage].prot = PROT_READ|PROT_WRITE;
-        currpt->m_pte[kernelBrkPage].pfn = temporary->m_frameNumber;
-        unsigned int r1offset = NUM_VPN >> 1;
-        for(pg = r0StackPages; pg < r1Pages; pg++)
+        gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 1;
+        gKernelPageTable.m_pte[gKStackPg0 - 1].prot = PROT_READ|PROT_WRITE;
+        gKernelPageTable.m_pte[gKStackPg0 - 1].pfn = temporary->m_frameNumber;
+        WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+        unsigned int r0offset = gNumPagesR0 * PAGESIZE;
+        for(pg = 0; pg < gNumPagesR1; pg++)
         {
             if(currpt->m_pte[pg].valid == 1)
             {
@@ -100,14 +69,14 @@ int kernelFork(void)
                     nextpt->m_pte[pg].valid = 1;
                     nextpt->m_pte[pg].prot = PROT_READ|PROT_WRITE;
                     nextpt->m_pte[pg].pfn = frame->m_frameNumber;
-                    unsigned int src = pg * PAGESIZE;
-                    unsigned int dest = kernelBrkPage * PAGESIZE;
+                    unsigned int src = (pg * PAGESIZE) + r0offset;
+                    unsigned int dest = (gKStackPg0 - 1) * PAGESIZE;
 
                     // copy from R1(pg) -> R0(kernelbrkpage)
                     memcpy(dest, src, PAGESIZE);
 
                     // swap out parent's R1 address space
-                    WriteRegister(REG_PTBR1, (unsigned int)(nextpt->m_pte + r1offset));
+                    WriteRegister(REG_PTBR1, (unsigned int)(nextpt->m_pte));
                     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
                     // perform the copy from R1 -> R0(child) address space
@@ -117,26 +86,51 @@ int kernelFork(void)
                     nextpt->m_pte[pg].prot = currpt->m_pte[pg].prot;
 
                     // swap back in the parent's R1 address space
-                    WriteRegister(REG_PTBR1, (unsigned int)(currpt->m_pte + r1offset));
+                    WriteRegister(REG_PTBR1, (unsigned int)(currpt->m_pte));
                     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+                }
+                else
+                {
+                    return ERROR;
                 }
             }
         }
 
         // remove the temporary used frame
         freeOneFrame(&gFreeFramePool, &gUsedFramePool, temporary->m_frameNumber);
-        currpt->m_pte[kernelBrkPage].valid = 0;
+        gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 0;
         free(temporary);
 
-        // Add the process to the ready-to-run queue
-        processEnqueue(&gReadyToRunProcessQ, nextpcb);
+        // allocate two frames for kernel stack frame
+        FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
+        nextpcb->m_pagetable->m_kstack[0].valid = 1; nextpcb->m_pagetable->m_kstack[0].prot = PROT_READ | PROT_WRITE; nextpcb->m_pagetable->m_kstack[0].pfn = kstack1->m_frameNumber;
+        nextpcb->m_pagetable->m_kstack[1].valid = 1; nextpcb->m_pagetable->m_kstack[1].prot = PROT_READ | PROT_WRITE; nextpcb->m_pagetable->m_kstack[1].pfn = kstack1->m_frameNumber;
 
-        // We have added the process to the ready-to-run queue
+        int rc = KernelContextSwitch(GetKCS, nextpcb, NULL);
+        if(rc == -1)
+        {
+            TracePrintf(0, "ERROR: Unable to get kernel stack for child\n");
+            return ERROR;
+        }
+
         // We have to return correct return codes
-        currpcb->m_uctx->regs[0] = nextpcb->m_pid;
-        nextpcb->m_uctx->regs[0] = 0;
-        nextpcb->m_uctx->sp = currpcb->m_uctx->sp;
-        nextpcb->m_uctx->pc = currpcb->m_uctx->pc;
+        if(gRunningProcessQ.m_head == NULL)
+        {
+            // The child woke up suddenly and found it can start running.!
+            TracePrintf(0, "INFO: Waking up as the child.\n");
+            swapPageTable(nextpcb);
+            nextpcb->m_uctx->regs[0] = 0;
+            processRemove(&gReadyToRunProcessQ, nextpcb);
+            processEnqueue(&gRunningProcessQ, nextpcb);
+            return SUCCESS;
+        }
+        else
+        {
+            // The parent puts the child in the ready to run queue and goes out doing its thing
+            currpcb->m_uctx->regs[0] = nextpcb->m_pid;
+            processEnqueue(&gReadyToRunProcessQ, nextpcb);
+        }
         return SUCCESS;
     }
     else
