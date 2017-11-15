@@ -101,6 +101,7 @@ void lockNodeEnqueue(LockQueueNode* lockQueueNode);
 void lockWaitingEnqueue(LockQueueNode* lockNode, PCB* pcb);
 PCB* lockWaitingDequeue(LockQueueNode* lockNode);
 LockQueueNode* getLockNode(int lockId);
+int removeLockNode(LockQueueNode* lockNode);
 int createLock(int pid);
 int freeLock(LockQueueNode* lockNode); // to be implemented when we write kernelReclaim
 

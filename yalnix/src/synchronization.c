@@ -48,6 +48,47 @@ LockQueueNode* getLockNode(int lockId)
     return NULL;
 }
 
+int removeLockNode(LockQueueNode* lockNode)
+{
+    if(lockNode == gLockQueue.m_head && lockNode == gLockQueue.m_tail)
+    {
+        // removing the only item in the list
+        gLockQueue.m_head = NULL;
+        gLockQueue.m_tail = NULL;
+        lockNode->m_pNext = NULL;
+        return SUCCESS;
+    }
+    else if(lockNode == gLockQueue.m_head)
+    {
+        // removing the head
+        gLockQueue.m_head = lockNode->m_pNext;
+        lockNode->m_pNext = NULL;
+        return SUCCESS;
+    }
+    else
+    {
+        // normal case
+        LockQueueNode* currNode = gLockQueue.m_head;
+        while(currNode->m_pNext != NULL)
+        {
+            if(currNode->m_pNext == lockNode)
+            {
+                // patch up the LL and return
+                currNode->m_pNext = currNode->m_pNext->m_pNext;
+                lockNode->m_pNext = NULL;
+                if(lockNode == gLockQueue.m_tail)
+                {
+                    gLockQueue.m_tail = currNode;
+                }
+                return SUCCESS;
+            }
+            currNode = currNode->m_pNext;
+        }
+    }
+    // not found
+    return ERROR;
+}
+
 int createLock(int pid)
 {
     // initialize new lock
@@ -88,6 +129,15 @@ int createLock(int pid)
 
 // to be implemented when we write kernelReclaim
 int freeLock(LockQueueNode* lockNode){
+    if(lockNode->m_waitingQueue->m_head != NULL)
+    {
+        // still processes waiting so return Error
+        return ERROR;
+    }
+    removeLockNode(lockNode);
+    free(lockNode->m_waitingQueue);
+    free(lockNode->m_pLock);
+    free(lockNode);
     return SUCCESS;
 }
 
@@ -164,7 +214,7 @@ int removeCVarNode(CVarQueueNode* cvarNode)
                 cvarNode->m_pNext = NULL;
                 if(cvarNode == gCVarQueue.m_tail)
                 {
-                    gCVarQueue.m_tail = NULL;
+                    gCVarQueue.m_tail = currNode;
                 }
                 return SUCCESS;
             }
