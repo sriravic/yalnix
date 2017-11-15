@@ -58,7 +58,7 @@ int createLock(int pid)
     }
     newLock->m_id = getUniqueSyncId(SYNC_LOCK);
     newLock->m_owner = pid;
-    newLock->m_state = LOCKED;
+    newLock->m_state = UNLOCKED;
 
     // initialize new PCBQueue for the waiting list
     PCBQueue* newPCBQueue = (PCBQueue*)malloc(sizeof(PCBQueue));
