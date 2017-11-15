@@ -538,12 +538,14 @@ int kernelBrk(void *addr)
 
     // get the pcb of the current running process that called for this brk
     // compute a couple of entries to make our lives easier
-    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-    PageTable* currPt = currPCB->m_pt;
-    unsigned int currBrk = currPCB->m_brk;
-    unsigned int brkPgNum = currBrk/PAGESIZE;
-    TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    UserProgPageTable* currpt = currpcb->m_pagetable;
+    unsigned int currBrk = currpcb->m_brk;
+    unsigned int brkPgNum = currBrk / PAGESIZE;
 
+    // reset brkpg num to offsetted page within r1
+    brkPgNum -= gNumPagesR0;
+    TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
     unsigned int delta;
     unsigned int pgDiff;
     int i;
@@ -552,39 +554,44 @@ int kernelBrk(void *addr)
     {
         // allocate memory
         delta = (newAddr - currBrk);
-        pgDiff = delta/PAGESIZE;
+        pgDiff = delta / PAGESIZE;
 
         /// TODO: error handling if we run out of free frames
         for(i = 1; i <= pgDiff; i++)
         {
             FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
-            unsigned int pfn = frame->m_frameNumber;
-            currPt->m_pte[brkPgNum+i].valid = 1; currPt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currPt->m_pte[brkPgNum+i].pfn = pfn;
-            TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+            if(frame != NULL)
+            {
+                unsigned int pfn = frame->m_frameNumber;
+                currpt->m_pte[brkPgNum+i].valid = 1; currpt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currpt->m_pte[brkPgNum+i].pfn = pfn;
+                TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+            }
+            else
+            {
+                TracePrintf(0, "Could not find free frames\n");
+                return ERROR;
+            }
         }
     }
     else
     {
         // deallocate memory
         delta = (currBrk - newAddr);
-        pgDiff = delta/PAGESIZE;
+        pgDiff = delta / PAGESIZE;
         for(i = 0; i < pgDiff; i++)
         {
-            currPt->m_pte[brkPgNum-i].valid = 0; currPt->m_pte[brkPgNum-i].prot = PROT_NONE;
-            int pfn = currPt->m_pte[brkPgNum-i].pfn;
+            currpt->m_pte[brkPgNum - i].valid = 0;
+            currpt->m_pte[brkPgNum - i].prot = PROT_NONE;
+            int pfn = currpt->m_pte[brkPgNum - i].pfn;
             freeOneFrame(&gFreeFramePool, &gUsedFramePool, pfn);
             TracePrintf(2, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
         }
-
-        // SRINATH: Why are we returning a SUCCESS here instead of a global success value?
-        //          What makes this else branch special?
-        return SUCCESS;
     }
 
     TracePrintf(2, "The page difference is: %d\n", pgDiff);
 
     // set the brk to be the new address
-    currPCB->m_brk = newAddr;
+    currpcb->m_brk = newAddr;
 
     // SRINATH: Well we are returning a success code here also? why two separate returns?
     return SUCCESS;

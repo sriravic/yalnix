@@ -16,6 +16,11 @@ struct pagetable
 #define R0PAGES			(VMEM_0_SIZE 			/ PAGESIZE)
 #define R1PAGES			(VMEM_1_SIZE			/ PAGESIZE)
 
+extern unsigned int gNumPagesR0;
+extern unsigned int gNumPagesR1;
+extern unsigned int gKStackPages;
+extern unsigned int gKStackPg0;
+
 // This is the global Kernel page table which is shared by all processes
 struct KernelPageTable
 {
