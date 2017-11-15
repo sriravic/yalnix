@@ -6,7 +6,7 @@ int main()
     while(1)
 	{
 		TracePrintf(1, "DoIdle Process - PID : %d\n", pid);
-		Pause();
+		Delay(2);
 	}
 	return 0;
 }

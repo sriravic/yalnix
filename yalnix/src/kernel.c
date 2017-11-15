@@ -626,8 +626,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 				TracePrintf(0, "Hurray I am alive.\n");
 				swapPageTable(pIdlePCB);
 
-				PCB* dequed = processDequeue(&gRunningProcessQ);
-				processEnqueue(&gReadyToRunProcessQ, dequed);
+				//PCB* dequed = processDequeue(&gRunningProcessQ);
+				//processEnqueue(&gReadyToRunProcessQ, dequed);
 				processRemove(&gReadyToRunProcessQ, pIdlePCB);					// remove the process that was picked to run
 				processEnqueue(&gRunningProcessQ, pIdlePCB);
 

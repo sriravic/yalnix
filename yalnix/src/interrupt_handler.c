@@ -152,6 +152,7 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_DELAY:
 				{
 					int clock_ticks = ctx->regs[0];
+					PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 					int rc = kernelDelay(clock_ticks);
 					if(rc == SUCCESS)
 					{
@@ -160,22 +161,22 @@ void interruptKernel(UserContext* ctx)
 						if(getHeadProcess(&gRunningProcessQ) == NULL)
 						{
 							// delay happened, so we can context switch
-							PCB* currPCB = getHeadProcess(&gSleepBlockedQ);
-							PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
-							memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
-							int rc = KernelContextSwitch(SwitchKCS, currPCB, nextPCB);
+							// TODO: get process by id
+							PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+							memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+							int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 							if(rc == -1)
 							{
 								TracePrintf(0, "Kernel Context switch failed\n");
 								exit(-1);
 							}
-
-							processEnqueue(&gRunningProcessQ, nextPCB);
-							processDequeue(&gReadyToRunProcessQ);
+							processRemove(&gReadyToRunProcessQ, currpcb);
+							processEnqueue(&gRunningProcessQ, currpcb);
+							currpcb->m_ticks = 0;
 
 							// swap out the page tables
-							swapPageTable(nextPCB);
-							memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
+							swapPageTable(currpcb);
+							memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
 							return;
 							}
 						}
@@ -425,17 +426,10 @@ void interruptClock(UserContext* ctx)
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
 
-	// update the quantum of runtime for the current running process
-	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-  	currPCB->m_ticks++;
-
 	/* Decrement the sleep time of each PCB in the sleep queue
 	 * If the PCB's sleep time is zero, it will be moved to the ready to run queue
 	*/
 	scheduleSleepingProcesses();
-
-	/* Exit logic?
-	*/
 
 	// check if any process that was in the read wait queue and we have data to service it
 	if(gReadFinishedQ.m_head != NULL)
@@ -461,37 +455,35 @@ void interruptClock(UserContext* ctx)
 	// process outstanding pipe read Requests
 	processPendingPipeReadRequests();
 
-	// if this process has run for too long
-	// say 3 ticks, then swap it with a different process in the ready to run queue
-	if(currPCB->m_ticks > 1)
+	// update the quantum of runtime for the current running process
+	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+  	currpcb->m_ticks++;
+	if(currpcb->m_ticks > 1)
 	{
 		// schedule logic
 		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
 		{
-			memcpy(currPCB->m_uctx, ctx, sizeof(UserContext));
 			TracePrintf(0, "We have a process to schedule out\n");
+			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 
-			// update the user context
-			currPCB->m_ticks = 0;	// reset ticks
-			PCB* nextPCB = getHeadProcess(&gReadyToRunProcessQ);
-			int rc = KernelContextSwitch(SwitchKCS, currPCB, nextPCB);
+			processDequeue(&gRunningProcessQ);
+			processEnqueue(&gReadyToRunProcessQ, currpcb);
+			PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 			if(rc == -1)
 			{
 				TracePrintf(0, "Kernel Context switch failed\n");
 				exit(-1);
 			}
 
-			// swap the two pcbs
-			PCB* old = processDequeue(&gRunningProcessQ);
-			processEnqueue(&gReadyToRunProcessQ, old);
-			processRemove(&gReadyToRunProcessQ, currPCB);					// remove the process that was picked to run
-			processEnqueue(&gRunningProcessQ, currPCB);
-
-			// swap out the page tables
-			swapPageTable(currPCB);
-
-			memcpy(ctx, currPCB->m_uctx, sizeof(UserContext));
-			if(nextPCB->m_iodata != NULL)
+			// We just awoke.! Reset my time
+			currpcb->m_ticks = 0;
+			processRemove(&gReadyToRunProcessQ, currpcb);					// remove the process that was picked to run
+			processEnqueue(&gRunningProcessQ, currpcb);
+			swapPageTable(currpcb);
+			memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+			/*
+			if(nextpcb->m_iodata != NULL)
 			{
 				// we have io data ready for this process
 				TerminalRequest* iodata = (TerminalRequest*)nextPCB->m_iodata;
@@ -502,6 +494,7 @@ void interruptClock(UserContext* ctx)
 				free(iodata->m_bufferR0);
 				free(iodata);
 			}
+			*/
 			return;
 		}
 	}
