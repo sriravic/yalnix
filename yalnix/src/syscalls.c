@@ -12,6 +12,7 @@
 // the global process id counter
 extern int gPID;
 extern void* gTerminalBuffer[NUM_TERMINALS];
+extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
@@ -749,29 +750,55 @@ int kernelLockInit(int *lock_idp)
     return SUCCESS;
 }
 
-int kernelAcquire(int lock_id)
+int kernelAcquire(int lock_id, UserContext* ctx)
 {
-    PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 
     LockQueueNode* lockNode = getLockNode(lock_id);
     if(lockNode == NULL)
     {
         return ERROR;
     }
+    else if(lockNode->m_holder == currpcb->m_pid)
+    {
+        // calling process already holds the lock
+        return ERROR;
+    }
 
     Lock* lock = lockNode->m_pLock;
     if(lock->m_state == UNLOCKED)
     {
-        // if the lock is free, update the lock's holder
-        lock->m_owner = currPCB->m_pid;
+        // if the lock is free, update the lock's holder and continue running
+        lockNode->m_holder = currpcb->m_pid;
         lock->m_state = LOCKED;
     }
     else
     {
         // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
         processDequeue(&gRunningProcessQ);
-        lockWaitingEnqueue(lockNode, currPCB);
+        lockWaitingEnqueue(lockNode, currpcb);
     }
+
+    if(getHeadProcess(&gRunningProcessQ) == NULL)
+    {
+        // calling process is now waiting on a lock, so context switch here
+        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(0, "Kernel Context switch failed\n");
+            exit(-1);
+        }
+        processRemove(&gReadyToRunProcessQ, currpcb);
+        processEnqueue(&gRunningProcessQ, currpcb);
+        currpcb->m_ticks = 0;
+
+        // swap out the page tables
+        swapPageTable(currpcb);
+        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+    }
+
     return SUCCESS;
 }
 
@@ -781,11 +808,12 @@ int kernelRelease(int lock_id) {
     LockQueueNode* lockNode = getLockNode(lock_id);
     if(lockNode == NULL)
     {
+        // if the lock doesn't exist, return ERROR
         return ERROR;
     }
-
     Lock* lock = lockNode->m_pLock;
-    if(lock->m_owner != currPCB->m_pid)
+
+    if(lockNode->m_holder != currPCB->m_pid)
     {
         // If the caller doesn't own the lock, return an error
         return ERROR;
@@ -794,20 +822,20 @@ int kernelRelease(int lock_id) {
     {
         // Otherwise unlock the lock and give it to the next waiting process if there is one
         lock->m_state = UNLOCKED;
-        lock->m_owner = -1;
-        PCB* newLockOwner = lockWaitingDequeue(lockNode);
-        if(newLockOwner != NULL)
+        lockNode->m_holder = -1;
+        PCB* newLockHolder = lockWaitingDequeue(lockNode);
+        if(newLockHolder != NULL)
         {
-            lock->m_owner = newLockOwner->m_pid;
+            lockNode->m_holder = newLockHolder->m_pid;
             lock->m_state = LOCKED;
-            processEnqueue(&gReadyToRunProcessQ, newLockOwner);
+            processEnqueue(&gReadyToRunProcessQ, newLockHolder);
         }
         return SUCCESS;
     }
 }
 
 int kernelCvarInit(int *cvar_idp) {
-	// Create a new cvar with a unique id, owned by the calling process
+    // Create a new cvar with a unique id, owned by the calling process
 	// Add the cvar to the gCVarQueue list
     // Save the unique id into cvar_idp
     PCB* currPCB = getHeadProcess(&gRunningProcessQ);
@@ -820,40 +848,144 @@ int kernelCvarInit(int *cvar_idp) {
 }
 
 int kernelCvarSignal(int cvar_id) {
-	// Find the cvar referred to by cvar_id and notify the first process waiting on it
+    // Find the cvar referred to by cvar_id and notify the first process waiting on it
+    CVarQueueNode* cvarNode = getCVarNode(cvar_id);
+    if(cvarNode == NULL)
+    {
+        // no cvar was initialized
+        return ERROR;
+    }
+
     // Wake up a waiter
-    return -1;
+    PCB* unblockedPCB = processDequeue(cvarNode->m_waitingQueue);
+    if(unblockedPCB != NULL)
+    {
+        processEnqueue(&gReadyToRunProcessQ, unblockedPCB);
+    }
+    return SUCCESS;
 }
 
 int kernelCvarBroadcast(int cvar_id) {
 	// Find the cvar referred to by cvar_id and notify all processes waiting on it
-    // Wake up a waiter
-    return -1;
+    CVarQueueNode* cvarNode = getCVarNode(cvar_id);
+    if(cvarNode == NULL)
+    {
+        // no cvar was initialized
+        return ERROR;
+    }
+
+    PCB* unblockedpcb = processDequeue(cvarNode->m_waitingQueue);
+    while(unblockedpcb != NULL)
+    {
+        processEnqueue(&gReadyToRunProcessQ, unblockedpcb);
+        unblockedpcb = processDequeue(cvarNode->m_waitingQueue);
+    }
+
+    return SUCCESS;
 }
 
-int kernelCvarWait(int cvar_id, int lock_id) {
-	// Release the lock referenced by lock_id
-	// Add the calling process to the waiting queue for cvar_id
-	// Wait to be notified by a CvarSignal or CvarBroadcast
+int kernelCvarWait(int cvar_id, int lock_id, UserContext* ctx)
+{
+    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+    CVarQueueNode* cvarNode = getCVarNode(cvar_id);
+    LockQueueNode* lockNode = getLockNode(lock_id);
+    if(cvarNode == NULL || lockNode == NULL)
+    {
+        // no cvar or lock were initialized
+        return ERROR;
+    }
+
+    // Throw error is the calling process doesn't currently hold the lock
+    if(lockNode->m_holder != currpcb->m_pid)
+    {
+        return ERROR;
+    }
+
+    // update the cvars lock id on the first time ONLY, else throw an ERROR
+    if(cvarNode->m_pCVar->m_lockId == -1)
+    {
+        cvarNode->m_pCVar->m_lockId = lock_id;
+    }
+    else if(cvarNode->m_pCVar->m_lockId != lock_id)
+    {
+        return ERROR;
+    }
+
+    // Release the lock referenced by lock_id
+    int release_rc = kernelRelease(lock_id);
+    if(release_rc == ERROR)
+    {
+        return ERROR;
+    }
+
+    // Add the calling process to the waiting queue for cvar_id
+    processDequeue(&gRunningProcessQ);
+    cvarWaitingEnqueue(cvarNode, currpcb);
+
+    // ****** scheduler *******
+    // run another process while waiting to be notified by a CvarSignal or CvarBroadcast
+    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+    int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+    if(rc == -1)
+    {
+        TracePrintf(0, "Kernel Context switch failed\n");
+        exit(-1);
+    }
+    processRemove(&gReadyToRunProcessQ, currpcb);
+    processEnqueue(&gRunningProcessQ, currpcb);
+    currpcb->m_ticks = 0;
+
+    // swap out the page tables
+    swapPageTable(currpcb);
+    memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+    // ****** scheduler *******
+
     // Acquire the lock again
-    return -1;
+    rc = kernelAcquire(lock_id, ctx);
+    if(rc == ERROR)
+    {
+        return ERROR;
+    }
+    return SUCCESS;
 }
 
 int kernelReclaim(int id) {
 	// If the calling process is not the owner of the lock/cvar/pipe referenced by id, return ERROR
-	// Free all resources held by the lock/cvar/pipe (usually waiting queues)
+	// Free all resources held by the lock/cvar/pipe (usually nodes and waiting queues)
     // Remove the lock/cvar/pipe from its global list
     SyncType t = getSyncType(id);
     if(t == SYNC_LOCK)
     {
-
+        LockQueueNode* lockNode = getLockNode(id);
+        if(lockNode == NULL)
+        {
+            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent lock\n");
+            return ERROR;
+        }
+        else
+        {
+            return freeLock(lockNode);
+        }
     }
     else if(t == SYNC_CVAR)
     {
-
+        CVarQueueNode* cvarNode = getCVarNode(id);
+        if(cvarNode == NULL)
+        {
+            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent cvar\n");
+            return ERROR;
+        }
+        else
+        {
+            return freeCVar(cvarNode);
+        }
     }
     else if(t == SYNC_PIPE)
     {
+        // SANDY: I think getPipeNode should return a pipe node, not a pipe.
+        // Then, freePipe can take the node as an argument and free the resources directly
+        // instead of finding the pipe node again.
         Pipe* p = getPipeNode(id);
         if(p == NULL)
         {
@@ -861,6 +993,6 @@ int kernelReclaim(int id) {
             return ERROR;
         }
         else
-            freePipe(id);
+            return freePipe(id);
     }
 }

@@ -90,18 +90,19 @@ typedef struct LockQueue LockQueue;
 struct LockQueueNode
 {
 	struct Lock* m_pLock;				// a pointer to the lock that is under consideration
+	int m_holder;                       // the pid of the process that holds the lock
 	PCBQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
 	struct LockQueueNode* m_pNext;		// a pointer to the next lock that is being used within the OS
 };
 typedef struct LockQueueNode LockQueueNode;
 
 // Lock functions
-void lockEnqueue(LockQueueNode* lockQueueNode);
+void lockNodeEnqueue(LockQueueNode* lockQueueNode);
 void lockWaitingEnqueue(LockQueueNode* lockNode, PCB* pcb);
 PCB* lockWaitingDequeue(LockQueueNode* lockNode);
 LockQueueNode* getLockNode(int lockId);
 int createLock(int pid);
-int deleteLock(); // to be implemented when we write kernelReclaim
+int freeLock(LockQueueNode* lockNode); // to be implemented when we write kernelReclaim
 
 
 // Condition variables
@@ -121,12 +122,13 @@ struct CVarQueueNode
 typedef struct CVarQueueNode CVarQueueNode;
 
 // CVar functions
-void cvarEnqueue(CVarQueueNode* cvarQueueNode);
+void cvarNodeEnqueue(CVarQueueNode* cvarQueueNode);
 void cvarWaitingEnqueue(CVarQueueNode* cvarQueueNode, PCB* pcb);
 PCB* cvarWaitingDequeue(CVarQueueNode* cvarQueueNode);
-CVarQueueNode* getCVarQueueNode(int cvarId);
+CVarQueueNode* getCVarNode(int cvarId);
+int removeCVarNode(CVarQueueNode* cvarNode);
 int createCVar(int pid);
-int deleteCVar(); // to be implemented when we write kernelReclaim
+int freeCVar(CVarQueueNode* cvarNode);
 
 // This node is used to store processes waiting on data from pipes
 struct PipeQueueNode
@@ -165,7 +167,7 @@ void pipeEnqueue(int id);
 int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb, void* buff);
 Pipe* getPipeNode(int id);
 void processPendingPipeReadRequests();
-void freePipe(int id);
+int freePipe(int id);
 
 // Globally defined pipes
 extern LockQueue gLockQueue;			// the global lock queue

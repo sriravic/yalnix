@@ -6,7 +6,7 @@
 #include "yalnix.h"
 
 /***** Lock functions *****/
-void lockEnqueue(LockQueueNode* lockQueueNode)
+void lockNodeEnqueue(LockQueueNode* lockQueueNode)
 {
     if(gLockQueue.m_head == NULL)
     {
@@ -76,22 +76,23 @@ int createLock(int pid)
     }
     newLockQueueNode->m_pLock = newLock;
     newLockQueueNode->m_waitingQueue = newPCBQueue;
+    newLockQueueNode->m_holder = -1;
     newLockQueueNode->m_pNext = NULL;
 
     // put the LockQueueNode in the LockQueue
-    lockEnqueue(newLockQueueNode);
+    lockNodeEnqueue(newLockQueueNode);
 
     // return the new lock's id
     return newLock->m_id;
 }
 
 // to be implemented when we write kernelReclaim
-int deleteLock(){
+int freeLock(LockQueueNode* lockNode){
     return -1;
 }
 
 /***** CVar functions *****/
-void cvarEnqueue(CVarQueueNode* cvarQueueNode)
+void cvarNodeEnqueue(CVarQueueNode* cvarQueueNode)
 {
     if(gCVarQueue.m_head == NULL)
     {
@@ -119,7 +120,7 @@ PCB* cvarWaitingDequeue(CVarQueueNode* cvarQueueNode)
     return processDequeue(cvarQueueNode->m_waitingQueue);
 }
 
-CVarQueueNode* getCVarQueueNode(int cvarId)
+CVarQueueNode* getCVarNode(int cvarId)
 {
     CVarQueueNode* currCVarQueueNode = gCVarQueue.m_head;
     while(currCVarQueueNode != NULL)
@@ -131,6 +132,20 @@ CVarQueueNode* getCVarQueueNode(int cvarId)
         currCVarQueueNode = currCVarQueueNode->m_pNext;
     }
     return NULL;
+}
+
+int removeCVarNode(CVarQueueNode* cvarNode)
+{
+    if(cvarNode == gCVarQueue.m_head && cvarNode == gCVarQueue.m_tail)
+    {
+        // removing the only item in the list
+        gCVarQueue.m_head = NULL;
+        gCVarQueue.m_tail = NULL;
+        cvarNode->m_pNext = NULL;
+        return SUCCESS;
+    }
+    //CVarQueueNode* currNode = gCVarQueue->m_head;
+    // TODO
 }
 
 int createCVar(int pid)
@@ -164,15 +179,21 @@ int createCVar(int pid)
     newCVarQueueNode->m_pNext = NULL;
 
     // put the CVarQueueNode in the CVarQueue
-    cvarEnqueue(newCVarQueueNode);
+    cvarNodeEnqueue(newCVarQueueNode);
 
     // return the new lock's id
     return newCVar->m_id;
 }
 
-int deleteCVar() // to be implemented when we write kernelReclaim
+int freeCVar(CVarQueueNode* cvarNode) // to be implemented when we write kernelReclaim
 {
-    return -1;
+    if(cvarNode->m_waitingQueue->m_head != NULL)
+    {
+        // still processes waiting so return Error
+        return ERROR;
+    }
+    // TODO
+
 }
 
 /***** utility functions *****/
@@ -334,7 +355,7 @@ void processPendingPipeReadRequests()
     }
 }
 
-void freePipe(int id)
+int freePipe(int id)
 {
-
+    return -1;
 }

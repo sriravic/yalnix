@@ -287,33 +287,9 @@ void interruptKernel(UserContext* ctx)
 		break;
 		case YALNIX_LOCK_ACQUIRE:
 			{
-				PCB* currPCB = getHeadProcess(&gRunningProcessQ);
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 				int lock_id = ctx->regs[0];
-				ctx->regs[0] = kernelAcquire(lock_id);
-				if(getHeadProcess(&gRunningProcessQ) == NULL)
-				{
-					// calling process is now waiting on a lock, so context switch here
-					PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
-
-					nextPCB->m_ticks = 0;
-					if(nextPCB != NULL)
-					{
-						int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
-						if(rc == -1)
-						{
-							TracePrintf(0, "Context switch failed");
-						}
-
-						processEnqueue(&gRunningProcessQ, nextPCB);
-						swapPageTable(nextPCB);
-						memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-						return;
-					}
-					else
-					{
-						TracePrintf(0, "Error: No process to run.!!\n");
-					}
-				}
+				ctx->regs[0] = kernelAcquire(lock_id, ctx);
 			}
 		break;
 		case YALNIX_LOCK_RELEASE:
@@ -344,9 +320,9 @@ void interruptKernel(UserContext* ctx)
 			{
 				int cvar_id = ctx->regs[0];
 				int lock_id = ctx->regs[1];
-				ctx->regs[0] = kernelCvarWait(cvar_id, lock_id);
+				ctx->regs[0] = kernelCvarWait(cvar_id, lock_id, ctx);
 			}
-			break;
+		break;
 		case YALNIX_PIPE_INIT:
 		{
 			PCB* currpcb = getHeadProcess(&gRunningProcessQ);
