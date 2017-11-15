@@ -630,7 +630,6 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 	// Move the calling process from the gIOBlocked list to the gReadyToRun list
     //return the number of bytes copied into
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    addTerminalReadRequest(currpcb, tty_id, TERM_REQ_READ, buf, len);
     return SUCCESS;
 }
 
@@ -694,9 +693,9 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 // context switch
                 processRemove(&gRunningProcessQ, currpcb);
                 processEnqueue(&gWriteBlockedQ, currpcb);
-                PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
+                PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
                 int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-                if(rc = -1)
+                if(rc == -1)
                 {
                     TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
 
@@ -707,12 +706,14 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                     }
                     processRemove(&gWriteBlockedQ, currpcb);
                     processEnqueue(&gRunningProcessQ, currpcb);
+                    swapPageTable(currpcb);
                     return -1;
                 }
 
                 // we wake up after we have written successfully to terminal
                 processRemove(&gWriteBlockedQ, currpcb);
                 processEnqueue(&gRunningProcessQ, currpcb);
+                swapPageTable(currpcb);
                 req->m_serviced += toSend;
             }
         }

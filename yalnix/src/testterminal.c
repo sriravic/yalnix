@@ -1,6 +1,6 @@
 #include <yalnix.h>
 
-void testWrite()
+void testWrite1()
 {
     const int size = 8196;
     char test[size];
@@ -24,6 +24,15 @@ void testWrite()
     }
 }
 
+void testWrite()
+{
+    while(1)
+    {
+        TtyPrintf(1, "HelloWorld\n");
+        Pause();
+    }
+}
+
 void testRead()
 {
     char prompt[] = "Reading From Terminal 0 : ";
@@ -40,7 +49,7 @@ int main(int argc, char** argv)
 {
     while(1)
     {
-        testRead();
+        testWrite();
         TracePrintf(0, "TestTerminal Program.!\n");
         Pause();
     }

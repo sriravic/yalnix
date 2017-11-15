@@ -366,34 +366,7 @@ void interruptClock(UserContext* ctx)
 	// Handle the cleanup of potential swapped out pages
 	TracePrintf(3, "TRAP_CLOCK\n");
 
-	/* Decrement the sleep time of each PCB in the sleep queue
-	 * If the PCB's sleep time is zero, it will be moved to the ready to run queue
-	*/
 	scheduleSleepingProcesses();
-
-	// check if any process that was in the read wait queue and we have data to service it
-	if(gReadFinishedQ.m_head != NULL)
-	{
-		PCB* process = processDequeue(&gReadFinishedQ);
-		while(process != NULL)
-		{
-			processEnqueue(&gReadyToRunProcessQ, process);
-			process = processDequeue(&gReadFinishedQ);
-		}
-	}
-
-	if(gWriteFinishedQ.m_head != NULL)
-	{
-		PCB* process = processDequeue(&gWriteFinishedQ);
-		while(process != NULL)
-		{
-			processEnqueue(&gReadyToRunProcessQ, process);
-			process = processDequeue(&gWriteFinishedQ);
-		}
-	}
-
-	// process outstanding pipe read Requests
-	processPendingPipeReadRequests();
 
 	// update the quantum of runtime for the current running process
 	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -422,19 +395,6 @@ void interruptClock(UserContext* ctx)
 			processEnqueue(&gRunningProcessQ, currpcb);
 			swapPageTable(currpcb);
 			memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-			/*
-			if(nextpcb->m_iodata != NULL)
-			{
-				// we have io data ready for this process
-				TerminalRequest* iodata = (TerminalRequest*)nextPCB->m_iodata;
-				memcpy(iodata->m_bufferR1, iodata->m_bufferR0, iodata->m_remaining);
-				ctx->regs[0] = iodata->m_remaining;
-
-				// delete the data that was used for io
-				free(iodata->m_bufferR0);
-				free(iodata);
-			}
-			*/
 			return;
 		}
 	}
@@ -471,7 +431,9 @@ void interruptMemory(UserContext* ctx)
 	unsigned int brkloc = (unsigned int)currPCB->m_brk;
 	unsigned int pg = (loc) / PAGESIZE;
 	unsigned int brkpg = (brkloc) / PAGESIZE;
-	if(currPCB->m_pt->m_pte[pg].valid == 0)
+	pg -= gNumPagesR0;
+	brkpg -= gNumPagesR0;
+	if(currPCB->m_pagetable->m_pte[pg].valid == 0)
 	{
 		// check to make sure that we are not silently growing into the heap.!!
 		if(pg - brkpg > 2)
@@ -484,20 +446,20 @@ void interruptMemory(UserContext* ctx)
 			// stack page.
 			// TODO: Add a PCB entry for the stack region of each process in R1.
 
-			unsigned int r1Top = VMEM_1_LIMIT / PAGESIZE;
+			unsigned int r1Top = gNumPagesR1;
 			int currpg;
 			for(currpg = r1Top; currpg >= pg; currpg--)
 			{
-				if(currPCB->m_pt->m_pte[currpg].valid == 1) continue;
+				if(currPCB->m_pagetable->m_pte[currpg].valid == 1) continue;
 				else
 				{
 					// started finding the invalid pages.
 					FrameTableEntry* frame = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
 					if(frame != NULL)
 					{
-						currPCB->m_pt->m_pte[pg].valid = 1;
-						currPCB->m_pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
-						currPCB->m_pt->m_pte[pg].pfn = frame->m_frameNumber;
+						currPCB->m_pagetable->m_pte[pg].valid = 1;
+						currPCB->m_pagetable->m_pte[pg].prot = PROT_READ | PROT_WRITE;
+						currPCB->m_pagetable->m_pte[pg].pfn = frame->m_frameNumber;
 					}
 					else
 					{
@@ -568,6 +530,7 @@ void interruptMath(UserContext* ctx)
 // Interrupt Handler for terminal recieve
 void interruptTtyReceive(UserContext* ctx)
 {
+	/*
 	int tty_id = ctx->code;
 
 	// put the current running process into ready to run queues
@@ -596,13 +559,38 @@ void interruptTtyReceive(UserContext* ctx)
 	}
 
 	processOutstandingReadRequests(tty_id);
+	*/
 }
 
 // Interrupt Handler for terminal transmit
 void interruptTtyTransmit(UserContext* ctx)
 {
 	int tty_id = ctx->code;
-	processOutstandingWriteRequests(tty_id);
+	// put the current running process into ready to run queues
+	PCB* currpcb = processDequeue(&gRunningProcessQ);
+	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+	processEnqueue(&gReadyToRunProcessQ, currpcb);
+
+	// pick the process that was doing a service requests
+	TerminalRequest* head = &gTermWReqHeads[tty_id];
+	TerminalRequest* req = head->m_next;
+	if(req != NULL)
+	{
+		PCB* nextpcb = req->m_pcb;
+		int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+		if(rc == -1)
+		{
+			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+		}
+
+		// THis process which called the terminal process to push text to terminal
+		// wakes up here again. We put ourselves again in running queue
+		processRemove(&gReadyToRunProcessQ, currpcb);
+		processEnqueue(&gRunningProcessQ, currpcb);
+		swapPageTable(currpcb);
+		memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+		return;
+	}
 }
 
 // This is a dummy interrupt handler that does nothing.

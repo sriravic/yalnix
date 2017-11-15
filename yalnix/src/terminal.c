@@ -1,5 +1,6 @@
 #include <terminal.h>
 
+/*
 void addTerminalWriteRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len)
 {
     if(tty_id < NUM_TERMINALS)
@@ -133,6 +134,7 @@ void processOutstandingWriteRequests(int tty_id)
 
 }
 
+
 void processOutstandingReadRequests(int tty_id)
 {
     if(tty_id < NUM_TERMINALS)
@@ -170,6 +172,7 @@ void processOutstandingReadRequests(int tty_id)
         }
     }
 }
+*/
 
 int removeTerminalRequest(int tty_id, TerminalRequest* request)
 {
