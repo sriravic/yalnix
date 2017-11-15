@@ -4,6 +4,7 @@
 
 #include "synchronization.h"
 #include "yalnix.h"
+#include "yalnixutils.h"
 
 /***** Lock functions *****/
 void lockNodeEnqueue(LockQueueNode* lockQueueNode)
@@ -13,13 +14,13 @@ void lockNodeEnqueue(LockQueueNode* lockQueueNode)
         // empty list
         gLockQueue.m_head = lockQueueNode;
         gLockQueue.m_tail = lockQueueNode;
-        lockQueueNode->m_pNext = NULL;
+        lockQueueNode->m_next = NULL;
     }
     else
     {
         // add to end
-        gLockQueue.m_tail->m_pNext = lockQueueNode;
-        lockQueueNode->m_pNext = NULL;
+        gLockQueue.m_tail->m_next = lockQueueNode;
+        lockQueueNode->m_next = NULL;
         gLockQueue.m_tail = lockQueueNode;
     }
 }
@@ -39,13 +40,54 @@ LockQueueNode* getLockNode(int lockId)
     LockQueueNode* currLockNode = gLockQueue.m_head;
     while(currLockNode != NULL)
     {
-        if(currLockNode->m_pLock->m_id == lockId)
+        if(currLockNode->m_lock->m_id == lockId)
         {
             return currLockNode;
         }
-        currLockNode = currLockNode->m_pNext;
+        currLockNode = currLockNode->m_next;
     }
     return NULL;
+}
+
+int removeLockNode(LockQueueNode* lockNode)
+{
+    if(lockNode == gLockQueue.m_head && lockNode == gLockQueue.m_tail)
+    {
+        // removing the only item in the list
+        gLockQueue.m_head = NULL;
+        gLockQueue.m_tail = NULL;
+        lockNode->m_next = NULL;
+        return SUCCESS;
+    }
+    else if(lockNode == gLockQueue.m_head)
+    {
+        // removing the head
+        gLockQueue.m_head = lockNode->m_next;
+        lockNode->m_next = NULL;
+        return SUCCESS;
+    }
+    else
+    {
+        // normal case
+        LockQueueNode* currNode = gLockQueue.m_head;
+        while(currNode->m_next != NULL)
+        {
+            if(currNode->m_next == lockNode)
+            {
+                // patch up the LL and return
+                currNode->m_next = currNode->m_next->m_next;
+                lockNode->m_next = NULL;
+                if(lockNode == gLockQueue.m_tail)
+                {
+                    gLockQueue.m_tail = currNode;
+                }
+                return SUCCESS;
+            }
+            currNode = currNode->m_next;
+        }
+    }
+    // not found
+    return ERROR;
 }
 
 int createLock(int pid)
@@ -74,10 +116,10 @@ int createLock(int pid)
     {
         return ERROR;
     }
-    newLockQueueNode->m_pLock = newLock;
+    newLockQueueNode->m_lock = newLock;
     newLockQueueNode->m_waitingQueue = newPCBQueue;
     newLockQueueNode->m_holder = -1;
-    newLockQueueNode->m_pNext = NULL;
+    newLockQueueNode->m_next = NULL;
 
     // put the LockQueueNode in the LockQueue
     lockNodeEnqueue(newLockQueueNode);
@@ -88,6 +130,15 @@ int createLock(int pid)
 
 // to be implemented when we write kernelReclaim
 int freeLock(LockQueueNode* lockNode){
+    if(lockNode->m_waitingQueue->m_head != NULL)
+    {
+        // still processes waiting so return Error
+        return ERROR;
+    }
+    removeLockNode(lockNode);
+    SAFE_FREE(lockNode->m_waitingQueue);
+    SAFE_FREE(lockNode->m_lock);
+    SAFE_FREE(lockNode);
     return SUCCESS;
 }
 
@@ -99,13 +150,13 @@ void cvarNodeEnqueue(CVarQueueNode* cvarQueueNode)
         // empty list
         gCVarQueue.m_head = cvarQueueNode;
         gCVarQueue.m_tail = cvarQueueNode;
-        cvarQueueNode->m_pNext = NULL;
+        cvarQueueNode->m_next = NULL;
     }
     else
     {
         // add to end
-        gCVarQueue.m_tail->m_pNext = cvarQueueNode;
-        cvarQueueNode->m_pNext = NULL;
+        gCVarQueue.m_tail->m_next = cvarQueueNode;
+        cvarQueueNode->m_next = NULL;
         gCVarQueue.m_tail = cvarQueueNode;
     }
 }
@@ -125,11 +176,11 @@ CVarQueueNode* getCVarNode(int cvarId)
     CVarQueueNode* currCVarQueueNode = gCVarQueue.m_head;
     while(currCVarQueueNode != NULL)
     {
-        if(currCVarQueueNode->m_pCVar->m_id == cvarId)
+        if(currCVarQueueNode->m_cvar->m_id == cvarId)
         {
             return currCVarQueueNode;
         }
-        currCVarQueueNode = currCVarQueueNode->m_pNext;
+        currCVarQueueNode = currCVarQueueNode->m_next;
     }
     return NULL;
 }
@@ -141,34 +192,34 @@ int removeCVarNode(CVarQueueNode* cvarNode)
         // removing the only item in the list
         gCVarQueue.m_head = NULL;
         gCVarQueue.m_tail = NULL;
-        cvarNode->m_pNext = NULL;
+        cvarNode->m_next = NULL;
         return SUCCESS;
     }
     else if(cvarNode == gCVarQueue.m_head)
     {
         // removing the head
-        gCVarQueue.m_head = cvarNode->m_pNext;
-        cvarNode->m_pNext = NULL;
+        gCVarQueue.m_head = cvarNode->m_next;
+        cvarNode->m_next = NULL;
         return SUCCESS;
     }
     else
     {
         // normal case
         CVarQueueNode* currNode = gCVarQueue.m_head;
-        while(currNode->m_pNext != NULL)
+        while(currNode->m_next != NULL)
         {
-            if(currNode->m_pNext == cvarNode)
+            if(currNode->m_next == cvarNode)
             {
                 // patch up the LL and return
-                currNode->m_pNext = currNode->m_pNext->m_pNext;
-                cvarNode->m_pNext = NULL;
+                currNode->m_next = currNode->m_next->m_next;
+                cvarNode->m_next = NULL;
                 if(cvarNode == gCVarQueue.m_tail)
                 {
-                    gCVarQueue.m_tail = NULL;
+                    gCVarQueue.m_tail = currNode;
                 }
                 return SUCCESS;
             }
-            currNode = currNode->m_pNext;
+            currNode = currNode->m_next;
         }
     }
     // not found
@@ -201,9 +252,9 @@ int createCVar(int pid)
     {
         return ERROR;
     }
-    newCVarQueueNode->m_pCVar = newCVar;
+    newCVarQueueNode->m_cvar = newCVar;
     newCVarQueueNode->m_waitingQueue = newPCBQueue;
-    newCVarQueueNode->m_pNext = NULL;
+    newCVarQueueNode->m_next = NULL;
 
     // put the CVarQueueNode in the CVarQueue
     cvarNodeEnqueue(newCVarQueueNode);
@@ -220,9 +271,9 @@ int freeCVar(CVarQueueNode* cvarNode) // to be implemented when we write kernelR
         return ERROR;
     }
     removeCVarNode(cvarNode);
-    free(cvarNode->m_waitingQueue);
-    free(cvarNode->m_pCVar);
-    free(cvarNode);
+    SAFE_FREE(cvarNode->m_waitingQueue);
+    SAFE_FREE(cvarNode->m_cvar);
+    SAFE_FREE(cvarNode);
     return SUCCESS;
 }
 
@@ -297,24 +348,17 @@ void pipeEnqueue(int uid)
 
 }
 
-Pipe* getPipeNode(int uid)
+PipeQueueNode* getPipeNode(int pipeId)
 {
-    PipeQueueNode* curr = gPipeQueue.m_head;
-    PipeQueueNode* next = curr;
-    if(curr == NULL)
+    PipeQueueNode* currPipeQueueNode = gPipeQueue.m_head;
+    while(currPipeQueueNode != NULL)
     {
-        TracePrintf(0, "ERROR: PipeQueue was empty\n");
-    }
-    while(next != NULL)
-    {
-        if(curr->m_pipe->m_id == uid) return curr->m_pipe;
-        else
+        if(currPipeQueueNode->m_pipe->m_id == pipeId)
         {
-            curr = next;
-            next = next->m_next;
+            return currPipeQueueNode;
         }
+        currPipeQueueNode = currPipeQueueNode->m_next;
     }
-    TracePrintf(0, "Pipe ID was not found\n");
     return NULL;
 }
 
@@ -355,9 +399,10 @@ void processPendingPipeReadRequests()
     {
         do {
             int pipeid = node->m_id;
-            Pipe* pipe = getPipeNode(pipeid);
-            if(pipe != NULL)
+            PipeQueueNode* pipeNode = getPipeNode(pipeid);
+            if(pipeNode != NULL)
             {
+                Pipe* pipe = pipeNode->m_pipe;
                 int requested = node->m_len;
                 int available = pipe->m_validLength;
                 if(requested <= available)
@@ -385,7 +430,52 @@ void processPendingPipeReadRequests()
     }
 }
 
-int freePipe(int id)
+int removePipeNode(PipeQueueNode* pipeNode)
 {
-    return -1;
+    if(pipeNode == gPipeQueue.m_head && pipeNode == gPipeQueue.m_tail)
+    {
+        // removing the only item in the list
+        gPipeQueue.m_head = NULL;
+        gPipeQueue.m_tail = NULL;
+        pipeNode->m_next = NULL;
+        return SUCCESS;
+    }
+    else if(pipeNode == gPipeQueue.m_head)
+    {
+        // removing the head
+        gPipeQueue.m_head = pipeNode->m_next;
+        pipeNode->m_next = NULL;
+        return SUCCESS;
+    }
+    else
+    {
+        // normal case
+        PipeQueueNode* currNode = gPipeQueue.m_head;
+        while(currNode->m_next != NULL)
+        {
+            if(currNode->m_next == pipeNode)
+            {
+                // patch up the LL and return
+                currNode->m_next = currNode->m_next->m_next;
+                pipeNode->m_next = NULL;
+                if(pipeNode == gPipeQueue.m_tail)
+                {
+                    gPipeQueue.m_tail = currNode;
+                }
+                return SUCCESS;
+            }
+            currNode = currNode->m_next;
+        }
+    }
+    // not found
+    return ERROR;
+}
+
+int freePipe(PipeQueueNode* pipeNode)
+{
+    removePipeNode(pipeNode);
+    SAFE_FREE(pipeNode->m_pipe->m_buffer);
+    SAFE_FREE(pipeNode->m_pipe);
+    SAFE_FREE(pipeNode);
+    return SUCCESS;
 }

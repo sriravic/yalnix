@@ -2,8 +2,6 @@
 #include <yalnixutils.h>
 #include <yalnix.h>
 
-#define SAFE_RELEASE(A) {if(A != NULL) free(A);}
-
 FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool)
 {
     // prev cannot be null
@@ -117,11 +115,11 @@ void freePCB(PCB* pcb)
     freeRegionOneFrames(pcb);
     freeKernelStackFrames(pcb);
     exitDataFree(pcb->m_edQ);     // free exit data queue
-    SAFE_RELEASE(pcb->m_uctx);
-    SAFE_RELEASE(pcb->m_kctx);
-    SAFE_RELEASE(pcb->m_pagetable);
-    SAFE_RELEASE(pcb->m_pt);
-    SAFE_RELEASE(pcb);
+    SAFE_FREE(pcb->m_uctx);
+    SAFE_FREE(pcb->m_kctx);
+    SAFE_FREE(pcb->m_pagetable);
+    SAFE_FREE(pcb->m_pt);
+    SAFE_FREE(pcb);
 }
 
 void freeRegionOneFrames(PCB* pcb)

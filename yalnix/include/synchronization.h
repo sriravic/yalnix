@@ -89,10 +89,10 @@ typedef struct LockQueue LockQueue;
 
 struct LockQueueNode
 {
-	struct Lock* m_pLock;				// a pointer to the lock that is under consideration
+	struct Lock* m_lock;				// a pointer to the lock that is under consideration
 	int m_holder;                       // the pid of the process that holds the lock
 	PCBQueue* m_waitingQueue;	// a pointer to the waiting list of processes to have the lock
-	struct LockQueueNode* m_pNext;		// a pointer to the next lock that is being used within the OS
+	struct LockQueueNode* m_next;		// a pointer to the next lock that is being used within the OS
 };
 typedef struct LockQueueNode LockQueueNode;
 
@@ -101,6 +101,7 @@ void lockNodeEnqueue(LockQueueNode* lockQueueNode);
 void lockWaitingEnqueue(LockQueueNode* lockNode, PCB* pcb);
 PCB* lockWaitingDequeue(LockQueueNode* lockNode);
 LockQueueNode* getLockNode(int lockId);
+int removeLockNode(LockQueueNode* lockNode);
 int createLock(int pid);
 int freeLock(LockQueueNode* lockNode); // to be implemented when we write kernelReclaim
 
@@ -115,9 +116,9 @@ typedef struct CVarQueue CVarQueue;
 
 struct CVarQueueNode
 {
-	struct CVar* m_pCVar;				// pointer to the condition variable under consideration
+	struct CVar* m_cvar;				// pointer to the condition variable under consideration
 	PCBQueue* m_waitingQueue;	        // the list of processes waiting on this condition variable to be satisfied
-	struct CVarQueueNode* m_pNext;		// a pointer to the next condition variable used within the system.
+	struct CVarQueueNode* m_next;		// a pointer to the next condition variable used within the system.
 };
 typedef struct CVarQueueNode CVarQueueNode;
 
@@ -165,9 +166,10 @@ typedef struct PipeReadWaitQueue PipeReadWaitQueue;
 
 void pipeEnqueue(int id);
 int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb, void* buff);
-Pipe* getPipeNode(int id);
+PipeQueueNode* getPipeNode(int pipeId);
 void processPendingPipeReadRequests();
-int freePipe(int id);
+int removePipeNode(PipeQueueNode* pipeNode);
+int freePipe(PipeQueueNode* pipeNode);
 
 // Globally defined pipes
 extern LockQueue gLockQueue;			// the global lock queue

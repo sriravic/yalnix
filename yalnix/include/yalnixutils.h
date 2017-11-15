@@ -1,6 +1,9 @@
 #ifndef __YALNIX_UTILS_H__
 #define __YALNIX_UTILS_H__
 
+// convenience macro
+#define SAFE_FREE(A) {if(A != NULL) free(A);}
+
 #include <pagetable.h>
 #include "process.h"
 
