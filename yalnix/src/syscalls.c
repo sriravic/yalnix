@@ -685,6 +685,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 {
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     int read = -1;
+    int toread = -1;
     TerminalRequest* head = &gTermRReqHeads[tty_id];
 
     // find the first empty slot
@@ -741,7 +742,8 @@ int kernelTtyRead(int tty_id, void *buf, int len)
             swapPageTable(currpcb);
 
             // copy back the stuff into user mode space
-            memcpy(req->m_bufferR1, req->m_bufferR0, req->m_serviced);
+            toread = req->m_serviced > req->m_len ? req->m_len : req->m_serviced;
+            memcpy(req->m_bufferR1, req->m_bufferR0, toread);
             }
     }
     else
@@ -750,7 +752,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
         return -1;
     }
 
-    read = req->m_serviced;
+    read = toread;
     if(removeTerminalRequest(tty_id, req) != 0)
         TracePrintf(1, "ERROR: Removing the request failed\n");
     return read;
