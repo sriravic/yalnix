@@ -3,7 +3,8 @@
 */
 
 #include <stdbool.h>
-#include "process.h"
+#include <process.h>
+#include <yalnixutils.h>
 
 PCB* processDequeue(PCBQueue* Q)
 {
@@ -156,47 +157,21 @@ ExitData* exitDataDequeue(EDQueue* Q)
     }
 }
 
-// We will use this function to remove a PCB from one of the queues
-// ultimately we would want one that simultaneuously picks one from one queue
-// removes it and then adds to the other queue
-void removeFromQueue(PCBQueue* Q, PCB* process)
+void freePCB(PCB* pcb)
 {
-    if(Q->m_head == NULL)
-    {
-        TracePrintf(0, "ERROR: There was no process in the queue to be removed.!");
-    }
-    else if(Q->m_head == Q->m_tail)
-    {
-        if(Q->m_head->m_pid = process->m_pid)
-        {
-            // we found the process
-            Q->m_head = NULL;
-            Q->m_tail = NULL;
-        }
-        else
-        {
-            TracePrintf(0, "WARNING: Process intended to be removed was not found in the queue.!");
-        }
-    }
-    else
-    {
-        PCB* curr = Q->m_head;
-        PCB* next = Q->m_head;
-        while(curr != NULL)
-        {
-            if(next->m_pid == process->m_pid)
-            {
-                curr->m_next = next->m_next;
-                next->m_next = NULL;
-                next->m_prev = NULL;
-            }
-            else
-            {
-                curr = next;
-                next = next->m_next;
-            }
-        }
-    }
+    freeRegionOneFrames(pcb);
+    freeKernelStackFrames(pcb);
+    exitDataFree(pcb->m_edQ);     // free exit data queue
+    SAFE_FREE(pcb->m_uctx);
+    SAFE_FREE(pcb->m_kctx);
+    SAFE_FREE(pcb->m_pagetable);
+    SAFE_FREE(pcb->m_pt);
+    SAFE_FREE(pcb);
+}
+
+void freeExitedProcesses()
+{
+    PCB* curr = getHeadProcess(&gExitedQ);
 
 }
 

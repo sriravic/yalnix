@@ -110,18 +110,6 @@ void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigne
     availPrev->m_next = curr;
 }
 
-void freePCB(PCB* pcb)
-{
-    freeRegionOneFrames(pcb);
-    freeKernelStackFrames(pcb);
-    exitDataFree(pcb->m_edQ);     // free exit data queue
-    SAFE_FREE(pcb->m_uctx);
-    SAFE_FREE(pcb->m_kctx);
-    SAFE_FREE(pcb->m_pagetable);
-    SAFE_FREE(pcb->m_pt);
-    SAFE_FREE(pcb);
-}
-
 void freeRegionOneFrames(PCB* pcb)
 {
     UserProgPageTable* pt = pcb->m_pagetable;

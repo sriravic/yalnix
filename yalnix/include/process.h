@@ -66,6 +66,7 @@ extern PCBQueue gWriteBlockedQ;
 extern PCBQueue gWriteFinishedQ;
 extern PCBQueue gReadBlockedQ;
 extern PCBQueue gReadFinishedQ;
+extern PCBQueue gExitedQ;
 
 // Function headers defined in process.c
 PCB* processDequeue(PCBQueue* Q);
@@ -77,6 +78,8 @@ PCB* getHeadProcess(PCBQueue* Q);
 bool isEmptyProcessQueue(PCBQueue* Q);
 int getProcessQueueSize(PCBQueue* Q);
 void removeFromQueue(PCBQueue* Q, PCB* process);
+void freePCB(PCB* pcb);
+void freeExitedProcesses();
 
 // Struct for keeping track of the data of a terminated process
 struct ExitData
