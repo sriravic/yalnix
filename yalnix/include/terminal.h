@@ -43,6 +43,11 @@ extern TerminalRequest gTermRReqHeads[NUM_TERMINALS];
 // convenient functions
 void addTerminalWriteRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
 void addTerminalReadRequest(PCB* pcb, int tty_id, TermReqCode code, void* data, int len);
+
+// removes a  request from the queues
+// returns 0 on success, -1 on error
+int removeTerminalRequest(int tty_id, TerminalRequest* req);
+
 void processOutstandingWriteRequests(int tty_id);
 
 #endif

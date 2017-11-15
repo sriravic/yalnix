@@ -19,7 +19,7 @@ void testWrite()
 
     while(1)
     {
-        TtyPrintf(0, test);
+        TtyPrintf(0, string);
         Pause();
     }
 }

@@ -169,42 +169,35 @@ void interruptKernel(UserContext* ctx)
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-
-				if(currpcb->m_kctx == NULL)
-				{
-					// do a dummy context switch to get the current kernel context
-					KernelContextSwitch(SwitchKCS, currpcb, NULL);
-				}
-
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
-				kernelTtyRead(tty_id, buf, len);
 
-				// do a context switch
-				PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
-				currpcb->m_ticks = 0;
-				nextpcb->m_ticks = 0;
-				if(nextpcb != NULL)
+				// Perform some checks
+				int allokay = 0;
+				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(0, "ERROR: Invalid terminal number\n"); }
+				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(0, "ERROR: Invalid address\n"); }
+				if(len < 0) { allokay = 3; TracePrintf(0, "ERROR: Invalid Length specified for write\n"); }
+
+				if(allokay != 0)
 				{
-					int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-					if(rc == -1)
-					{
-						TracePrintf(0, "Context switch failed within tty read\n");
-					}
-					else
-					{
-						processRemove(&gRunningProcessQ, currpcb);
-						processEnqueue(&gReadBlockedQ, currpcb);
-						processEnqueue(&gRunningProcessQ, nextpcb);
-						swapPageTable(nextpcb);
-						memcpy(ctx, nextpcb->m_uctx, sizeof(UserContext));
-						return;
-					}
+					// We encountered an error.!
+					// Syscall Specs: Return ERROR
+					currpcb->m_uctx->regs[0] = ERROR;
+					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+					return;
 				}
 				else
 				{
-					TracePrintf(0, "No free process to run\n");
+					// The current process will go inside and do a context switch
+					// it will be repeatedly context switched till it either completes correctly
+					// or fails. It will come out of this function and continue executing into userland
+					int read = kernelTtyRead(tty_id, buf, len);
+					if(read == len)
+						currpcb->m_uctx->regs[0] = len;
+					else currpcb->m_uctx->regs[0] = ERROR;
+					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+					return;
 				}
 			}
 		break;
@@ -212,50 +205,35 @@ void interruptKernel(UserContext* ctx)
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-
-				if(currpcb->m_kctx == NULL)
-				{
-					// do a dummy context switch to get the current kernel context
-					KernelContextSwitch(SwitchKCS, currpcb, NULL);
-				}
-
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
-				kernelTtyWrite(tty_id, buf, len);
 
-				// initiate the first transfer and wait for hardware to trap
-				if(gTermWReqHeads[tty_id].m_requestInitiated == 0)
+				// Perform some error checks
+				int allokay = 0;
+				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(0, "ERROR: Invalid terminal number\n"); }
+				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(0, "ERROR: Invalid address\n"); }
+				if(len < 0) { allokay = 3; TracePrintf(0, "ERROR: Invalid Length specified for write\n"); }
+
+				if(allokay != 0)
 				{
-					// initiate the handling of a transfer.
-					// the future remaining requests are handled by the trap handler
-					// when the terminal fires up the interrupts.
-					processOutstandingWriteRequests(ctx->regs[0]);
-					gTermWReqHeads[tty_id].m_requestInitiated = 1;
-				}
-
-				// do a context switch here
-				PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
-				currpcb->m_ticks = 0;
-				nextpcb->m_ticks = 0;
-				if(nextpcb != NULL)
-				{
-					int rc = KernelContextSwitch(SwitchKCS, nextpcb, currpcb);
-					if(rc == -1)
-					{
-						TracePrintf(0, "Context switch failed");
-					}
-
-					processRemove(&gRunningProcessQ, currpcb);
-					processEnqueue(&gWriteBlockedQ, currpcb);
-					processEnqueue(&gRunningProcessQ, nextpcb);
-					swapPageTable(nextpcb);
-					memcpy(ctx, nextpcb->m_uctx, sizeof(UserContext));
+					// We encountered an error.!
+					// Syscall Specs: Return ERROR
+					currpcb->m_uctx->regs[0] = ERROR;
+					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
 					return;
 				}
 				else
 				{
-					TracePrintf(0, "Error: No process to run.!!\n");
+					// The current process will go inside and do a context switch
+					// it will be repeatedly context switched till it either completes correctly
+					// or fails. It will come out of this function and continue executing into userland
+					int written = kernelTtyWrite(tty_id, buf, len);
+					if(written == len)
+						currpcb->m_uctx->regs[0] = len;
+					else currpcb->m_uctx->regs[0] = ERROR;
+					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+					return;
 				}
 			}
 		break;
@@ -590,22 +568,39 @@ void interruptMath(UserContext* ctx)
 // Interrupt Handler for terminal recieve
 void interruptTtyReceive(UserContext* ctx)
 {
-	// allocate memory in kernel space for moving contents from
-	// terminal memory to kernel memory.
-	// move the data from kernel memory into process space of any process waiting on data from the terminal
-	// free up the data from kernel memory.
 	int tty_id = ctx->code;
+
+	// put the current running process into ready to run queues
+	PCB* currpcb = processDequeue(&gRunningProcessQ);
+	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+	processEnqueue(&gReadyToRunProcessQ, currpcb);
+
+	// pick the process that was doing a service requests
+	TerminalRequest* head = &gTermWReqHeads[tty_id];
+	TerminalRequest* req = head->m_next;
+	if(req != NULL)
+	{
+		PCB* nextpcb = req->m_pcb;
+		int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+		if(rc == -1)
+		{
+			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+		}
+
+		// THis process which called the terminal process to push text to terminal
+		// wakes up here again. We put ourselves again in running queue
+		processRemove(&gReadyToRunProcessQ, currpcb);
+		processEnqueue(&gRunningProcessQ, currpcb);
+		memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+		return;
+	}
+
 	processOutstandingReadRequests(tty_id);
 }
 
 // Interrupt Handler for terminal transmit
 void interruptTtyTransmit(UserContext* ctx)
 {
-	// check for correctness of data from transmit message from terminal
-	// move the data from terminal's address space to kernel's address space
-	// move the data to any process that is waiting on terminal data/
-	// in case of a valid command for process
-		// call fork() - exec with the parameters
 	int tty_id = ctx->code;
 	processOutstandingWriteRequests(tty_id);
 }

@@ -12,8 +12,6 @@
 // the global process id counter
 extern int gPID;
 extern void* gTerminalBuffer[NUM_TERMINALS];
-extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
-
 extern KernelContext* GetKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
@@ -525,6 +523,8 @@ int kernelGetPid(void) {
 }
 
 // Brk raises or lowers the value of the process's brk to contain addr
+// NOTE: Check if brk enters into data-text segments.
+//       return error in any case.!
 int kernelBrk(void *addr)
 {
     unsigned int newAddr = (unsigned int)addr;
@@ -613,8 +613,8 @@ int kernelDelay(int clock_ticks)
         // Move the running process to the sleep queue
         PCB* currPCB = getHeadProcess(&gRunningProcessQ);
         currPCB->m_timeToSleep = clock_ticks;
-        processEnqueue(&gSleepBlockedQ, currPCB);
         processDequeue(&gRunningProcessQ);
+        processEnqueue(&gSleepBlockedQ, currPCB);
         TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
         return SUCCESS;
     }
@@ -635,12 +635,107 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 }
 
 // TTYWrite writes to the terminal tty_id
+// returns the number of bytes it wrote to the terminal
+// the only way to return an error is by returning a value that is not equal to the len
+// we use -1 in this case
 int kernelTtyWrite(int tty_id, void *buf, int len)
 {
     // Add a request to the terminal queue
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    addTerminalWriteRequest(currpcb, tty_id, TERM_REQ_WRITE, buf, len);
-    return SUCCESS;
+    int written = 0;
+
+    // Each process creates a request
+    // create a request and then goes to sleep
+    // when the TRAP_WRITE is received, that process then goes to sleep
+    // picks the first process in the queue allowing it to finish
+        // the process wakes here
+        // if its done with its work, it puts itself in running queue
+        // removes itself from the blocked queue
+        // continues out of this call
+
+    TerminalRequest* head = &gTermWReqHeads[tty_id];
+
+    // find the first empty slot
+    TerminalRequest* curr = head;
+    TerminalRequest* next = curr->m_next;
+    while(next != NULL)
+    {
+        curr = next;
+        next = curr->m_next;
+    }
+
+    // create the new entry for this request
+    TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
+    if(req != NULL)
+    {
+        req->m_code = TERM_REQ_WRITE;
+        req->m_pcb = currpcb;
+        req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
+        req->m_next = NULL;
+        if(req->m_bufferR0 != NULL)
+        {
+            // append the request to the queue of request
+            curr->m_next = req;
+            memcpy(req->m_bufferR0, buf, sizeof(char) * len);
+            req->m_len = len;
+            req->m_serviced = 0;
+            req->m_remaining = len;
+            req->m_next = NULL;
+
+            int iter = len / TERMINAL_MAX_LINE;
+            if(len % TERMINAL_MAX_LINE != 0) iter += 1;     // add one more iter if we dont have perfect sizes
+            int i;
+            for(i = 0; i < iter; i++)
+            {
+                int toSend = req->m_remaining;
+                toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
+                TtyTransmit(tty_id, req->m_bufferR0 + req->m_serviced, toSend);
+
+                // context switch
+                processRemove(&gRunningProcessQ, currpcb);
+                processEnqueue(&gWriteBlockedQ, currpcb);
+                PCB* nextpcb = processDequeue(&gReadyToRunProcessQ);
+                int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+                if(rc = -1)
+                {
+                    TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+
+                    // remove this node from gTermWReqHeads queue
+                    if(removeTerminalRequest(tty_id, req) != 0)
+                    {
+                        TracePrintf(1, "ERROR: Removing the request failed\n");
+                    }
+                    processRemove(&gWriteBlockedQ, currpcb);
+                    processEnqueue(&gRunningProcessQ, currpcb);
+                    return -1;
+                }
+
+                // we wake up after we have written successfully to terminal
+                processRemove(&gWriteBlockedQ, currpcb);
+                processEnqueue(&gRunningProcessQ, currpcb);
+                req->m_serviced += toSend;
+            }
+        }
+        else
+        {
+            TracePrintf(0, "Error could not allocate memory for storing the amount %d bytes within the request\n", len);
+            free(req);
+            return -1;
+        }
+    }
+    else
+    {
+        TracePrintf(0, "Error: Couldnt allocate memory for terminal request");
+        return -1;
+    }
+
+    // remove the request from the queue and associated Memory
+    int serviced = req->m_serviced;
+    if(removeTerminalRequest(tty_id, req) != 0)
+        TracePrintf(1, "ERROR: Removing the request failed\n");
+
+    // return the amount that was serviced
+    return serviced;
 }
 
 int kernelPipeInit(int *pipe_idp)
