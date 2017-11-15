@@ -44,6 +44,4 @@ extern TerminalRequest gTermRReqHeads[NUM_TERMINALS];
 // returns 0 on success, -1 on error
 int removeTerminalRequest(int tty_id, TerminalRequest* req);
 
-void processOutstandingWriteRequests(int tty_id);
-
 #endif

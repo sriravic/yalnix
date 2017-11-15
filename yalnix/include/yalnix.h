@@ -1,8 +1,8 @@
-/* 
- * Yalnix Support Software for Linux/x86 
+/*
+ * Yalnix Support Software for Linux/x86
  *
  * Original SunOS/SPARC version by David Johnson, CMU/Rice. dbj@cs.rice.edu
- * 
+ *
  * Subsequently ported to Solaris/SPARC by the infamous Juan Leon
  *
  * Ported to Linux/x86 by S.W. Smith, Dartmouth College.  Summer 2001
@@ -53,10 +53,10 @@
 
 #define YALNIX_READ_SECTOR	    41
 #define YALNIX_WRITE_SECTOR	    42
-#else 
+#else
 //-----------Linux version------------------------------------
 
-#define YALNIX_PREFIX            0xabcdef00    
+#define YALNIX_PREFIX            0xabcdef00
 #define YALNIX_MASK              0x000000FF
 
 #define	YALNIX_FORK		        ( 0x1 | YALNIX_PREFIX)
@@ -115,6 +115,8 @@
 #define KILL                (-2)
 
 #define SUCCESS             (0)
+
+#define PIPE_BUFFER_LEN     256
 
 /*
  * Server index definitions for Register(index) and Send(msg, -index):
