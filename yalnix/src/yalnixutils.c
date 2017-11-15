@@ -15,7 +15,7 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
     if(prevA == NULL || prevU == NULL)
     {
         TracePrintf(0, "Cannot get one free frame as header was NULL\n");
-
+        return NULL;
     }
 
     // pick the first frame
@@ -36,6 +36,55 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
     usedPrev->m_next = ret;
     ret->m_next = NULL;
     return ret;
+}
+
+FrameTableEntry* getNFreeFrames(FrameTableEntry* availPool, FrameTableEntry* usedPool, int nframes)
+{
+    if(nframes == 1) return getOneFreeFrame(availPool, usedPool);
+    else
+    {
+        // prev cannot be null
+        FrameTableEntry* prevA = availPool;
+        FrameTableEntry* prevU = usedPool;
+        FrameTableEntry* ret = NULL;
+
+        // do one sanity check before proceeding
+        if(prevA == NULL || prevU == NULL)
+        {
+            TracePrintf(0, "Cannot get one free frame as header was NULL\n");
+            return NULL;
+        }
+
+        // pick the contiguous chunk of frames
+        ret = availPool->m_next;
+        FrameTableEntry* temp = ret;
+        int i;
+        for(i = 1; i < nframes; i++)
+        {
+            temp = temp->m_next;
+            if(temp == NULL)
+            {
+                // we cannot find one large chunk
+                // return null silently
+                return NULL;
+            }
+        }
+
+        availPool->m_next = temp->m_next;
+
+        // add the contiguous chunk of elements to the end of the used list
+        FrameTableEntry* usedCurr = usedPool;
+        FrameTableEntry* usedPrev = usedPool;
+        while(usedCurr != NULL)
+        {
+            usedPrev = usedCurr;
+            usedCurr = usedCurr->m_next;
+        }
+
+        usedPrev->m_next = ret;
+        temp->m_next = NULL;
+        return ret;
+    }
 }
 
 void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigned int frameNum)

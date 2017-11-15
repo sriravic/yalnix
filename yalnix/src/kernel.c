@@ -595,7 +595,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	setR1PageTableAlone(pIdlePCB);
 
-	char idleprog[] = "idle";
+	char idleprog[] = "testfork";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 
@@ -621,9 +621,10 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		{
 			// We might have waken up as another process here
 			// just to make sure check what the current running PCB is
-			if(gKernelPageTable.m_pte[gKStackPg0].pfn != 126 && gKernelPageTable.m_pte[gKStackPg0].pfn != 127)
+			//if(gKernelPageTable.m_pte[gKStackPg0].pfn != 126 && gKernelPageTable.m_pte[gKStackPg0].pfn != 127)
+			if(gRunningProcessQ.m_head == NULL)
 			{
-				TracePrintf(0, "Hurray I am alive.\n");
+				TracePrintf(0, "INFO: Waking up as the child.\n");
 				swapPageTable(pIdlePCB);
 
 				//PCB* dequed = processDequeue(&gRunningProcessQ);
