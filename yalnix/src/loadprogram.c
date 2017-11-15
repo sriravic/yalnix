@@ -173,7 +173,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // (PROT_READ | PROT_WRITE).
     int pg;
     int allocPages = 0;
-    for(pg = text_pg1; pg < NUM_VPN && allocPages < li.t_npg; pg++)
+    for(pg = text_pg1; pg < gNumPagesR1 && allocPages < li.t_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -187,7 +187,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     // These pages should be marked valid, with a protection of
     // (PROT_READ | PROT_WRITE).
     allocPages = 0;
-    for(pg = data_pg1; pg < NUM_VPN && allocPages < data_npg; pg++)
+    for(pg = data_pg1; pg < gNumPagesR1 && allocPages < data_npg; pg++)
     {
         pt->m_pte[pg].valid = 1;
         pt->m_pte[pg].prot = PROT_READ | PROT_WRITE;
@@ -197,7 +197,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     }
 
     // set the brk of the heap to be the base address of the next page above datasegment
-    pcb->m_brk = pg * PAGESIZE;
+    pcb->m_brk = (pg + gNumPagesR0) * PAGESIZE;
 
     /*
     * Allocate memory for the user stack too.
