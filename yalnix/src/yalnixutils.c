@@ -178,3 +178,24 @@ void setR1PageTableAlone(PCB* process)
     WriteRegister(REG_PTLR1, R1PAGES);
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 }
+
+// Returns -1 in case  of ERROR
+// Returns 0 in case of success
+// NOTE: What about stack space that has grown down and then grown up?
+//       Such pages are still valid.!
+int checkValidAddress(unsigned int addr, PCB* pcb)
+{
+    // check for any address is region0
+    if(addr < VMEM_1_BASE) return -1;
+
+    // check if address is in a valid region in R1
+    // that includes, stack space, and only heap space
+    // text and data are WRITE_PROTECTED.
+    // so we can just AND and see if our bit is set.
+    int r1page = addr / PAGESIZE;
+    r1page -= gNumPagesR0;
+
+    UserProgPageTable* currpt = pcb->m_pagetable;
+    if(currpt->m_pte[r1page].valid == 0 || (currpt->m_pte[r1page].prot & PROT_WRITE) == 0) return -1;
+    else return 0;
+}
