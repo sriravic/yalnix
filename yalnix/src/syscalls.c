@@ -453,6 +453,7 @@ void kernelExit(int status)
     if(currPCB->m_pid == 0)
     {
         // If init exits, halt the system
+        TracePrintf(0, "INIT EXITED SO HALTING THE SYSTEM\n");
         Halt();
     }
 

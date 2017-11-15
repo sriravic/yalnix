@@ -158,7 +158,7 @@ int createCVar(int pid)
     }
     newCVar->m_id = getUniqueSyncId(SYNC_CVAR);
     newCVar->m_owner = pid;
-    newCVar->m_lockId = 0;
+    newCVar->m_lockId = -1;
 
     // initialize new PCBQueue for the waiting list
     PCBQueue* newPCBQueue = (PCBQueue*)malloc(sizeof(PCBQueue));

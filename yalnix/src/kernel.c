@@ -595,11 +595,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	setR1PageTableAlone(pIdlePCB);
 
-<<<<<<< HEAD
 	char idleprog[] = "idle";
-=======
-	char idleprog[] = "testexec";
->>>>>>> 2eaa35a900e35a52334d81ee591456352f06a455
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 
