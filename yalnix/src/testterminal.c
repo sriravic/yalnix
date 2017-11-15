@@ -47,10 +47,11 @@ void testRead()
 
 int main(int argc, char** argv)
 {
+
     while(1)
     {
-        testWrite();
         TracePrintf(0, "TestTerminal Program.!\n");
+        testRead();
         Pause();
     }
     return 0;
