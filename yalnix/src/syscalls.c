@@ -477,7 +477,7 @@ void kernelExit(int status)
         if(exitData == NULL)
         {
             TracePrintf(0, "Failed to malloc for exit data\n");
-            return ERROR;
+            return;
         }
         exitData->m_status = status;
         exitData->m_pid = currPCB->m_pid;
