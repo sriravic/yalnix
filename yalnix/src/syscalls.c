@@ -3,11 +3,11 @@
 #include <load_info.h>
 #include <process.h>
 #include <pagetable.h>
+#include <synchronization.h>
 #include <terminal.h>
 #include <unistd.h>
 #include <yalnix.h>
 #include <yalnixutils.h>
-#include <synchronization.h>
 
 // the global process id counter
 extern int gPID;
@@ -876,15 +876,14 @@ int kernelPipeInit(int *pipe_idp)
         return ERROR;
     else
     {
-        pipeEnqueue(uid);
+        if(pipeEnqueue(uid) != 0) return ERROR;
         *pipe_idp = uid;
         return SUCCESS;
     }
 }
 
-int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead)
+int kernelPipeRead(int pipe_id, void *buf, int len)
 {
-    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     PipeQueueNode* pipeNode = getPipeNode(pipe_id);
     if(pipeNode == NULL)
     {
@@ -894,19 +893,46 @@ int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead)
     else
     {
         Pipe* p = pipeNode->m_pipe;
-        if(len <= p->m_validLength)
+        if(len > p->m_wLength)
         {
-            // request served immediately
-            memcpy(buf, p->m_buffer, sizeof(char) * len);
-            *actuallyRead = len;
-            return len;
+            // block till we are awoken again
+            PCB* currpcb = processDequeue(&gRunningProcessQ);
+            PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+            if(pipeReadWaitEnqueue(pipe_id, len, currpcb, buf) != 0)
+            {
+                TracePrintf(0, "ERROR: Unable to add to wait pipe queue\n");
+                processEnqueue(&gRunningProcessQ, currpcb);
+                swapPageTable(currpcb);
+                return ERROR;
+            }
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "ERROR: Context switch failed\n");
+                //undo the operations
+                PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
+                SAFE_FREE(node);
+                processEnqueue(&gRunningProcessQ, currpcb);
+                swapPageTable(currpcb);
+                return ERROR;
+            }
+            // we are awoken kernelExit
+            PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
+            SAFE_FREE(node);
+            processEnqueue(&gRunningProcessQ, currpcb);
+            swapPageTable(currpcb);
         }
-        else
+
+        // request served immediately or after context switch
+        int remaining = p->m_wLength - len;
+        memcpy(buf, p->m_buffer, sizeof(char) * len);
+        if(remaining > 0)
         {
-            // we dont have enough bytes
-            *actuallyRead = 0;
-            return 0;
+            memcpy(p->m_buffer, p->m_buffer + len, remaining);          // move remaining contents forward
+            memset(p->m_buffer + len, 0, PIPE_BUFFER_LEN - len);        // zero out the pipe effectively cleaning it
         }
+        p->m_wLength -= len;                                            // reset the valid length
+        return len;                                                     // return what was read.
     }
 }
 
@@ -921,47 +947,19 @@ int kernelPipeWrite(int pipe_id, void *buf, int len)
     else
     {
         Pipe* p = pipeNode->m_pipe;
-        if(p->m_validLength == 0)
+        if(p->m_wLength + len > PIPE_BUFFER_LEN)
         {
-            // the first time this is called
-            // so allocate memory
-            void* pdata = (void*)malloc(sizeof(char) * len);
-            if(pdata != NULL)
-            {
-                p->m_len = len;
-                p->m_validLength = len;
-                p->m_buffer = pdata;
-                memcpy(p->m_buffer, buf, sizeof(char) * len);
-                return len;
-            }
-            else
-            {
-                TracePrintf(0, "ERROR: Unable to allocate memroy for pipe\n");
-                return ERROR;
-            }
+            TracePrintf(0, "ERROR: Pipe is full\n");
+            return ERROR;
         }
         else
         {
-            // check if the new size is greater than old size
-            // if so, free the current memory
-            // and allocate new memory for pipe
-            // else if less, clear the memory, and modify the valid length
-            if(len > p->m_len)
-            {
-                free(p->m_buffer);
-                p->m_buffer = (void*)malloc(sizeof(char) * len);
-                p->m_len = len;
-                p->m_validLength = len;
-                memcpy(p->m_buffer, buf, sizeof(char) * len);
-                return len;
-            }
-            else
-            {
-                memset(p->m_buffer, 0, sizeof(char) * p->m_len);
-                memcpy(p->m_buffer, buf, sizeof(char) * len);
-                p->m_validLength = len;
-                return len;
-            }
+            int offset = p->m_wLength;
+            memcpy(p->m_buffer + offset, buf, sizeof(char) * len);
+            p->m_wLength += len;
+            // move any process that is waiting on a write for this pipe into the ready to run queue
+
+            return len;
         }
     }
 }

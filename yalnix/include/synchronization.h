@@ -67,8 +67,7 @@ struct Pipe
 {
 	int m_id;			// the unique identifier for a pipe
 	void* m_buffer;		// the buffer where the pipe's contents are stored
-	int m_len;			// the length of the m_buffer
-	int m_validLength;	// in case of reuse of pipes, we can reuse memory allocated, but make sure only data is valid till this length
+	int m_wLength;		// the length of the pipe contents that is valid after written to
 };
 
 typedef struct Pipe Pipe;
@@ -164,10 +163,11 @@ typedef struct PipeReadWaitQueueNode PipeReadWaitQueueNode;
 typedef struct PipeQueue PipeQueue;
 typedef struct PipeReadWaitQueue PipeReadWaitQueue;
 
-void pipeEnqueue(int id);
+int pipeEnqueue(int id);
 int pipeReadWaitEnqueue(int id, int m_len, PCB* pcb, void* buff);
+PipeReadWaitQueueNode* removePipeReadWaitNode(int id, PCB* pcb);
 PipeQueueNode* getPipeNode(int pipeId);
-void processPendingPipeReadRequests();
+void processPendingPipeReadRequests(int pipe_id, int currlen);
 int removePipeNode(PipeQueueNode* pipeNode);
 int freePipe(PipeQueueNode* pipeNode);
 
