@@ -503,23 +503,11 @@ void kernelExit(int status, UserContext* ctx)
         }
     }
 
-    // move the pcb to the terminated queue so that the kernel can free it later
-    processDequeue(&gRunningProcessQ);
-    processEnqueue(&gExitedQ, currpcb);
+    char* errormessage = "kernelExit";
+    scheduler(&gExitedQ, currpcb, ctx, errormessage);
 
-    // half context switch because we will never come back
-    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-    if(nextpcb != NULL)
-    {
-        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        // TODO: handle failure case
-        KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-    }
-    else
-    {
-        TracePrintf(0, "ERROR: No PCB - Inside : KernelExit\n");
-        Halt();
-    }
+    TracePrintf("SERIOUS ERROR: An exited process should not come back to life.\n");
+    Halt();
 }
 
 // Wait
@@ -547,36 +535,8 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
     // if for some reason a process gets woken up erroneously, it will just go back to sleep.
     while(exitData == NULL)
     {
-        //TracePrintf(2, "Process waiting for a child to exit\n");
-
-        // ******SCHEDULER******
-        // no exited children but running children, so move it to gWaitProcessQ and context switch
-        processDequeue(&gRunningProcessQ);
-        processEnqueue(&gWaitProcessQ, currpcb);
-
-        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        // TODO: Handle the failure case of context switch gracefully.
-        if(nextpcb != NULL)
-        {
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
-            {
-                TracePrintf(0, "Kernel Context switch failed\n");
-                exit(-1);
-            }
-        }
-        else
-        {
-            TracePrintf(0, "ERROR: No PCB - Inside : KernelWait\n");
-        }
-        processRemove(&gReadyToRunProcessQ, currpcb);
-        processEnqueue(&gRunningProcessQ, currpcb);
-
-        // swap out the page tables
-        swapPageTable(currpcb);
-        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-        // ******SCHEDULER******
+        char* errormessage = "kernelWait";
+        scheduler(&gWaitProcessQ, currpcb, ctx, errormessage);
 
         // when this process picks up again, it should have a new exit data to return
         // if for some strange reason it does not, then the loop will run again
@@ -688,33 +648,8 @@ int kernelDelay(int clock_ticks, UserContext* ctx)
         // Move the running process to the sleep queue
         PCB* currpcb = getHeadProcess(&gRunningProcessQ);
         currpcb->m_timeToSleep = clock_ticks;
-
-        processDequeue(&gRunningProcessQ);
-        processEnqueue(&gSleepBlockedQ, currpcb);
-
-        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        // NOTE: Handle this failure case gracefully.
-        if(nextpcb != NULL)
-        {
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
-            {
-                TracePrintf(0, "Kernel Context switch failed\n");
-                exit(-1);
-            }
-        }
-        else
-        {
-            TracePrintf(0, "ERROR: No PCB - Inside : KernelDelay\n");
-        }
-
-        processRemove(&gReadyToRunProcessQ, currpcb);
-        processEnqueue(&gRunningProcessQ, currpcb);
-
-        // swap out the page tables
-        swapPageTable(currpcb);
-        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+        char* errormessage = "kernelDelay";
+        scheduler(&gSleepBlockedQ, currpcb, ctx, errormessage);
 
         return SUCCESS;
     }
@@ -1088,37 +1023,9 @@ int kernelAcquire(int lock_id, UserContext* ctx)
     else
     {
         // Else, add the calling process to the lock referenced by lock_id's queue of waiting processes
-        processDequeue(&gRunningProcessQ);
-        lockWaitingEnqueue(lockNode, currpcb);
+        char* errormessage = "kernelAcquire";
+        scheduler(lockNode->m_waitingQueue, currpcb, ctx, errormessage);
     }
-
-    if(getHeadProcess(&gRunningProcessQ) == NULL)
-    {
-        // calling process is now waiting on a lock, so context switch here
-        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        if(nextpcb != NULL)
-        {
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
-            {
-                TracePrintf(0, "Kernel Context switch failed\n");
-                exit(-1);
-            }
-        }
-        else
-        {
-            TracePrintf(0, "ERROR : NO PCB - In : kernelAcquire\n");
-        }
-        processRemove(&gReadyToRunProcessQ, currpcb);
-        processEnqueue(&gRunningProcessQ, currpcb);
-        currpcb->m_ticks = 0;
-
-        // swap out the page tables
-        swapPageTable(currpcb);
-        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-    }
-
     return SUCCESS;
 }
 
@@ -1238,39 +1145,11 @@ int kernelCvarWait(int cvar_id, int lock_id, UserContext* ctx)
         return ERROR;
     }
 
-    // Add the calling process to the waiting queue for cvar_id
-    processDequeue(&gRunningProcessQ);
-    cvarWaitingEnqueue(cvarNode, currpcb);
-
-    // ****** scheduler *******
-    // run another process while waiting to be notified by a CvarSignal or CvarBroadcast
-    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-    int rc;
-    if(nextpcb != NULL)
-    {
-        rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-        if(rc == -1)
-        {
-            TracePrintf(0, "Kernel Context switch failed\n");
-            exit(-1);
-        }
-    }
-    else
-    {
-        TracePrintf(0, "ERROR: NO PCB - IN: kernelCvarWait\n");
-    }
-    processRemove(&gReadyToRunProcessQ, currpcb);
-    processEnqueue(&gRunningProcessQ, currpcb);
-    currpcb->m_ticks = 0;
-
-    // swap out the page tables
-    swapPageTable(currpcb);
-    memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-    // ****** scheduler *******
+    char* errormessage = "kernelCVarWait";
+    scheduler(cvarNode->m_waitingQueue, currpcb, ctx, errormessage);
 
     // Acquire the lock again
-    rc = kernelAcquire(lock_id, ctx);
+    int rc = kernelAcquire(lock_id, ctx);
     if(rc == ERROR)
     {
         return ERROR;

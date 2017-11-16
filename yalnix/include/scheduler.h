@@ -7,4 +7,6 @@
 
 void scheduleSleepingProcesses();
 
+int scheduler(PCBQueue* destQueue, PCB* currpcb, UserContext* ctx, char* errormessage);
+
 #endif
