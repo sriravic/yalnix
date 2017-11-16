@@ -79,7 +79,7 @@ void interruptKernel(UserContext* ctx)
         case YALNIX_BRK:
             {
 				void* addr = (void *)ctx->regs[0];
-				TracePrintf(2, "Brk address is: %x\n", addr);
+				TracePrintf(3, "INFO : Brk address is: %x\n", addr);
             	int rc = kernelBrk(addr);
 				ctx->regs[0] = rc;
             }

@@ -619,7 +619,7 @@ int kernelBrk(void *addr)
 
     // reset brkpg num to offsetted page within r1
     brkPgNum -= gNumPagesR0;
-    TracePrintf(2, "The current brk page is: %d\n", brkPgNum);
+    TracePrintf(3, "INFO: The current brk page is: %d\n", brkPgNum);
     unsigned int delta;
     unsigned int pgDiff;
     int i;
@@ -662,7 +662,7 @@ int kernelBrk(void *addr)
         }
     }
 
-    TracePrintf(2, "The page difference is: %d\n", pgDiff);
+    TracePrintf(3, "INFO: The page difference is: %d\n", pgDiff);
 
     // set the brk to be the new address
     currpcb->m_brk = newAddr;
@@ -848,6 +848,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 currpcb->m_ticks = 0;
                 return -1;
             }
+            TracePrintf(2, "INFO: PID : %d is about to try to terminal \n", currpcb->m_pid);
         }
         else
         {
@@ -859,6 +860,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
     }
 
     // create the new entry for this request
+    TracePrintf(2, "INFO: PID : %d is about do a terminal write\n", currpcb->m_pid);
     TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
     if(req != NULL)
     {
@@ -914,7 +916,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 }
 
                 // we wake up after we have written successfully to terminal
-                processRemove(&gWriteBlockedQ, currpcb);
+                processRemove(&gReadyToRunProcessQ, currpcb);
                 processEnqueue(&gRunningProcessQ, currpcb);
                 swapPageTable(currpcb);
                 req->m_serviced += toSend;
