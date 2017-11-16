@@ -9,7 +9,7 @@ extern void kernelExit(int status, UserContext* ctx);
 extern int kernelWait(int *status_ptr, UserContext* ctx);
 extern int kernelGetPid(void);
 extern int kernelBrk(void *addr);
-extern int kernelDelay(int clock_ticks);
+extern int kernelDelay(int clock_ticks, UserContext* ctx);
 extern int kernelTtyRead(int tty_id, void *buf, int len);
 extern int kernelTtyWrite(int tty_id, void *buf, int len);
 extern int kernelPipeInit(int *pipe_idp);

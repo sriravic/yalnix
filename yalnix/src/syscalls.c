@@ -645,7 +645,7 @@ int kernelBrk(void *addr)
 }
 
 // Delay pauses the process for a time of clock_ticks
-int kernelDelay(int clock_ticks)
+int kernelDelay(int clock_ticks, UserContext* ctx)
 {
     TracePrintf(0, "kernalDelay called\n");
     if(clock_ticks < 0)
@@ -659,11 +659,11 @@ int kernelDelay(int clock_ticks)
     else
     {
         // Move the running process to the sleep queue
-        PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-        currPCB->m_timeToSleep = clock_ticks;
+        PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+        currpcb->m_timeToSleep = clock_ticks;
 
         processDequeue(&gRunningProcessQ);
-        processEnqueue(&gSleepBlockedQ, currPCB);
+        processEnqueue(&gSleepBlockedQ, currpcb);
 
         PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
         memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));

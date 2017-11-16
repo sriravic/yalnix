@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <process.h>
 #include <yalnixutils.h>
+#include <synchronization.h>
 
 PCB* processDequeue(PCBQueue* Q)
 {
@@ -83,7 +84,7 @@ void processRemove(PCBQueue* Q, PCB* process)
 }
 
 // return the PCB with pid in the given queue, or NULL if there is not one
-PCB* getPcbByPid(PCBQueue* Q, unsigned int pid)
+PCB* getPcbByPid(PCBQueue* Q, int pid)
 {
     PCB* curr = Q->m_head;
     while(curr != NULL)
@@ -100,8 +101,25 @@ PCB* getPcbByPid(PCBQueue* Q, unsigned int pid)
     return NULL;
 }
 
+PCB* getPcbByPidInLocks(int pid)
+{
+    LockQueueNode* lockNode = gLockQueue.m_head;
+    PCB* pcb = NULL;
+    while(lockNode != NULL)
+    {
+        pcb = getPcbByPid(lockNode->m_waitingQueue, pid);
+        if(pcb != NULL)
+        {
+            return pcb;
+        }
+        lockNode = lockNode->m_next;
+    }
+    return NULL;
+}
+
+
 // return the first PCB that is a child of the given ppid, or NULL if there is not one
-PCB* getChildOfPpid(PCBQueue* Q, unsigned int ppid)
+PCB* getChildOfPpid(PCBQueue* Q, int ppid)
 {
     PCB* curr = Q->m_head;
     while(curr != NULL)
@@ -114,6 +132,22 @@ PCB* getChildOfPpid(PCBQueue* Q, unsigned int ppid)
         {
             curr = curr->m_next;
         }
+    }
+    return NULL;
+}
+
+PCB* getChildOfPpidInLocks(int ppid)
+{
+    LockQueueNode* lockNode = gLockQueue.m_head;
+    PCB* pcb = NULL;
+    while(lockNode != NULL)
+    {
+        pcb = getChildOfPpid(lockNode->m_waitingQueue, ppid);
+        if(pcb != NULL)
+        {
+            return pcb;
+        }
+        lockNode = lockNode->m_next;
     }
     return NULL;
 }

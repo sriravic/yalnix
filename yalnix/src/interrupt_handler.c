@@ -92,8 +92,7 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_DELAY:
 			{
 				int clock_ticks = ctx->regs[0];
-				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-				ctx->regs[0] = kernelDelay(clock_ticks);
+				ctx->regs[0] = kernelDelay(clock_ticks, ctx);
 			}
 		break;
 		case YALNIX_TTY_READ:
