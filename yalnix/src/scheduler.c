@@ -35,13 +35,13 @@ int scheduler(PCBQueue* destQueue, PCB* currpcb, UserContext* ctx, char* errorme
         int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
         if(rc == -1)
         {
-            TracePrintf(0, "Kernel Context switch failed\n");
+            TracePrintf(SEVERE, "Kernel Context switch failed\n");
             exit(-1);
         }
     }
     else
     {
-        TracePrintf(0, "ERROR: no pcb in %c\n", errormessage);
+        TracePrintf(SEVERE, "ERROR: no pcb in %c\n", errormessage);
         Halt();
     }
 

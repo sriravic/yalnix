@@ -289,7 +289,7 @@ int getUniqueSyncId(SyncType t)
         return (nextId | PIPE_MASK);
     else
     {
-        TracePrintf(0, "INVALID SyncType passed.!!");
+        TracePrintf(MILD, "INVALID SyncType passed.!!");
         return 0xFFFFFFFF;
     }
 }
@@ -302,7 +302,7 @@ SyncType getSyncType(int compoundId)
     else if(type == 3) return SYNC_PIPE;
     else
     {
-        TracePrintf(0, "ERROR: Invalid Sync Type\n");
+        TracePrintf(MILD, "ERROR: Invalid Sync Type\n");
         return SYNC_UNDEFINED;
     }
 }
@@ -327,8 +327,8 @@ int pipeEnqueue(int uid)
     }
     else
     {
-        TracePrintf(0, "Error allocating space for pipe entry\n");
-        return -1;
+        TracePrintf(MODERATE, "Error allocating space for pipe entry\n");
+        return ERROR;
     }
 
     // do queue operations
@@ -387,7 +387,7 @@ int pipeReadWaitEnqueue(int id, int len, PCB* pcb, void* buff)
     }
     else
     {
-        TracePrintf(0, "Error allocating memory for pipe read wait queue node\n");
+        TracePrintf(MODERATE, "Error allocating memory for pipe read wait queue node\n");
         return ERROR;
     }
     return 0;

@@ -26,7 +26,7 @@ void interruptKernel(UserContext* ctx)
 				int rc = kernelFork();
 				if(rc != SUCCESS)
 				{
-					TracePrintf(0, "Fork() failed\n");
+					TracePrintf(MODERATE, "Fork() failed\n");
 					currpcb->m_uctx->regs[0] = -1;
 					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
 					return;
@@ -47,12 +47,12 @@ void interruptKernel(UserContext* ctx)
 				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 				char* filename = (char*)(ctx->regs[0]);
 				char** argvec = (char**)(ctx->regs[1]);
-				TracePrintf(0, "Exec arg0 : %s\n", filename);
-				TracePrintf(0, "Exec argv[0]: %s\n", argvec[0]);
+				TracePrintf(DEBUG, "Exec arg0 : %s\n", filename);
+				TracePrintf(DEBUG, "Exec argv[0]: %s\n", argvec[0]);
 				int rc = kernelExec(filename, argvec);
 				if(rc != SUCCESS)
 				{
-					TracePrintf(0, "Exec failed\n");
+					TracePrintf(MODERATE, "Exec failed\n");
 				}
 				else
 				{
@@ -64,7 +64,7 @@ void interruptKernel(UserContext* ctx)
 		break;
 		case YALNIX_EXIT:
 			{
-				TracePrintf(2, "Process exited\n");
+				TracePrintf(DEBUG, "Process exited\n");
 				int status = ctx->regs[0];	// figure out how to get the real status
 				kernelExit(status, ctx);
 			}
@@ -79,7 +79,7 @@ void interruptKernel(UserContext* ctx)
         case YALNIX_BRK:
             {
 				void* addr = (void *)ctx->regs[0];
-				TracePrintf(3, "INFO : Brk address is: %x\n", addr);
+				TracePrintf(DEBUG, "INFO : Brk address is: %x\n", addr);
             	int rc = kernelBrk(addr);
 				ctx->regs[0] = rc;
             }
@@ -106,9 +106,9 @@ void interruptKernel(UserContext* ctx)
 
 				// Perform some checks
 				int allokay = 0;
-				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(0, "ERROR: Invalid terminal number\n"); }
-				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(0, "ERROR: Invalid address\n"); }
-				if(len < 0) { allokay = 3; TracePrintf(0, "ERROR: Invalid Length specified for write\n"); }
+				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(MODERATE, "ERROR: Invalid terminal number\n"); }
+				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(MODERATE, "ERROR: Invalid address\n"); }
+				if(len < 0) { allokay = 3; TracePrintf(MODERATE, "ERROR: Invalid Length specified for write\n"); }
 
 				if(allokay != 0)
 				{
@@ -142,9 +142,9 @@ void interruptKernel(UserContext* ctx)
 
 				// Perform some error checks
 				int allokay = 0;
-				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(0, "ERROR: Invalid terminal number\n"); }
-				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(0, "ERROR: Invalid address\n"); }
-				if(len < 0) { allokay = 3; TracePrintf(0, "ERROR: Invalid Length specified for write\n"); }
+				if(tty_id >= NUM_TERMINALS) { allokay = 1; TracePrintf(MODERATE, "ERROR: Invalid terminal number\n"); }
+				if(checkValidAddress((unsigned int)buf, currpcb) != 0) { allokay = 2; TracePrintf(MODERATE, "ERROR: Invalid address\n"); }
+				if(len < 0) { allokay = 3; TracePrintf(MODERATE, "ERROR: Invalid Length specified for write\n"); }
 
 				if(allokay != 0)
 				{
@@ -242,7 +242,7 @@ void interruptKernel(UserContext* ctx)
 				int pipe_id = (int)ctx->regs[0];
 				void* buff = (void*)ctx->regs[1];
 				int len = (int)ctx->regs[2];
-				if(len > PIPE_BUFFER_LEN) { TracePrintf(0, "ERROR: Writing to a pipe with length greater than its size\n"); ctx->regs[0] = ERROR; return; }
+				if(len > PIPE_BUFFER_LEN) { TracePrintf(MODERATE, "ERROR: Writing to a pipe with length greater than its size\n"); ctx->regs[0] = ERROR; return; }
 				int rc = kernelPipeWrite(pipe_id, buff, len);
 				memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
 				ctx->regs[0] = rc;
@@ -278,7 +278,7 @@ void interruptClock(UserContext* ctx)
 {
 	// Handle movement of processes from different waiting/running/exited queues
 	// Handle the cleanup of potential swapped out pages
-	TracePrintf(3, "TRAP_CLOCK\n");
+	TracePrintf(DEBUG, "TRAP_CLOCK\n");
 
 	scheduleSleepingProcesses();
 	processPendingPipeReadRequests();
@@ -292,7 +292,7 @@ void interruptClock(UserContext* ctx)
 		// schedule logic
 		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
 		{
-			TracePrintf(0, "We have a process to schedule out\n");
+			TracePrintf(DEBUG, "We have a process to schedule out\n");
 			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 
 			processDequeue(&gRunningProcessQ);
@@ -303,13 +303,13 @@ void interruptClock(UserContext* ctx)
 				int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 				if(rc == -1)
 				{
-					TracePrintf(0, "Kernel Context switch failed\n");
+					TracePrintf(SEVERE, "Kernel Context switch failed\n");
 					exit(-1);
 				}
 			}
 			else
 			{
-				TracePrintf(0, "ERROR: Didnot find another process to schedule - Inside : INTERRUPT_CLOCK\n");
+				TracePrintf(SEVERE, "ERROR: Didnot find another process to schedule - Inside : INTERRUPT_CLOCK\n");
 			}
 
 			// We just awoke.! Reset my time
@@ -326,7 +326,7 @@ void interruptClock(UserContext* ctx)
 void interruptIllegal(UserContext* ctx)
 {
 	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-	TracePrintf(0, "Illegal Interrupt Happened.\nKilling Process : %d\n", currpcb->m_pid);
+	TracePrintf(SEVERE, "Illegal Interrupt Happened.\nKilling Process : %d\n", currpcb->m_pid);
 
 	int status = ctx->regs[0];
 	kernelExit(status, ctx);
@@ -343,7 +343,7 @@ void interruptMemory(UserContext* ctx)
 	int code = ctx->code;
 	if(code == YALNIX_ACCERR)
 	{
-		TracePrintf(0, "Memtrap for a page with invalid access permissions. Killing the process\n");
+		TracePrintf(SEVERE, "Memtrap for a page with invalid access permissions. Killing the process\n");
 		kernelExit(ERROR, ctx);
 	}
 
@@ -385,21 +385,21 @@ void interruptMemory(UserContext* ctx)
 					}
 					else
 					{
-						TracePrintf(0, "Could not find one free page\n");
+						TracePrintf(MODERATE, "Could not find one free page\n");
 					}
 				}
 			}
 		}
 		else
 		{
-			TracePrintf(0, "User program stack region exhausted and might grow into heap.!\n");
-			TracePrintf(0, "Not allocating the requested page\n");
+			TracePrintf(MODERATE, "User program stack region exhausted and might grow into heap.!\n");
+			TracePrintf(MODERATE, "Not allocating the requested page\n");
 			kernelExit(ctx->regs[0], ctx);
 		}
 	}
 	else
 	{
-		TracePrintf(0, "Interrupt memory in a page that is valid? Something fishy!\n");
+		TracePrintf(MODERATE, "Interrupt memory in a page that is valid? Something fishy!\n");
 	}
 }
 
@@ -435,12 +435,12 @@ void interruptTtyReceive(UserContext* ctx)
 			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
 			if(rc == -1)
 			{
-				TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+				TracePrintf(SEVERE, "ERROR: context switch failed inside terminal receive interrupt handler\n");
 			}
 		}
 		else
 		{
-			TracePrintf(0, "ERROR: No pcb to schedule : Inside : TTY_RECEIVE\n");
+			TracePrintf(SEVERE, "ERROR: No pcb to schedule : Inside : TTY_RECEIVE\n");
 		}
 	}
 

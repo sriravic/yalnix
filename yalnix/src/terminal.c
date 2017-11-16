@@ -8,7 +8,7 @@ int removeTerminalRequest(int tty_id, TerminalRequest* request)
         head = &gTermWReqHeads[tty_id];
     else if(request->m_code == TERM_REQ_READ)
         head = &gTermRReqHeads[tty_id];
-    else { TracePrintf(0, "ERROR: Invalid terminal id supplied to remove request\n"); return -1; }
+    else { TracePrintf(MODERATE, "ERROR: Invalid terminal id supplied to remove request\n"); return ERROR; }
 
     /*
     TerminalRequest* prev = head->m_next;
@@ -44,8 +44,8 @@ int removeTerminalRequest(int tty_id, TerminalRequest* request)
     }
     else
     {
-        TracePrintf(0, "ERROR: Could not find the request\n");
-        return -1;
+        TracePrintf(MODERATE, "ERROR: Could not find the request\n");
+        return ERROR;
     }
 
 }
