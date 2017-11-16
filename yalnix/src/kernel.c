@@ -508,13 +508,11 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_pagetable 	= pInitPT;
 	pInitPCB->m_uctx 		= pInitUC;
 	pInitPCB->m_kctx 		= NULL;
-	pInitPCB->m_state 		= PROCESS_RUNNING;
 	pInitPCB->m_ticks 		= 0;
 	pInitPCB->m_timeToSleep = 0;
 	pInitPCB->m_next 		= NULL;
 	pInitPCB->m_prev 		= NULL;
 	pInitPCB->m_edQ 		= initEDQ;
-	pInitPCB->m_iodata 		= NULL;
 
 	// add init to the running process
 	processEnqueue(&gRunningProcessQ, pInitPCB);
@@ -586,18 +584,16 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_pagetable 	= pIdlePT;
 	pIdlePCB->m_uctx 		= pIdleUC;
 	pIdlePCB->m_kctx 		= NULL;
-	pIdlePCB->m_state 		= PROCESS_READY;
 	pIdlePCB->m_ticks 		= 0;					// 0 for now.
 	pIdlePCB->m_timeToSleep	= 0;
 	pIdlePCB->m_next 		= NULL;
 	pIdlePCB->m_prev 		= NULL;
 	pIdlePCB->m_edQ 		= idleEDQ;
-	pInitPCB->m_iodata 		= NULL;
 
 	// reset to idle's pagetables for successfulyl loading
 	setR1PageTableAlone(pIdlePCB);
 
-	char idleprog[] = "testterminal";
+	char idleprog[] = "testexit";
 	char* tempargs[] = {NULL};
 	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 

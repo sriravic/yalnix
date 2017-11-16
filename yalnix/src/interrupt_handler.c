@@ -90,41 +90,12 @@ void interruptKernel(UserContext* ctx)
             }
         break;
 		case YALNIX_DELAY:
-				{
-					int clock_ticks = ctx->regs[0];
-					PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-					int rc = kernelDelay(clock_ticks);
-					if(rc == SUCCESS)
-					{
-						TracePrintf(2, "Delay was successful\n");
-
-						if(getHeadProcess(&gRunningProcessQ) == NULL)
-						{
-							// delay happened, so we can context switch
-							// TODO: get process by id
-							PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-							memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-							int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-							if(rc == -1)
-							{
-								TracePrintf(0, "Kernel Context switch failed\n");
-								exit(-1);
-							}
-							processRemove(&gReadyToRunProcessQ, currpcb);
-							processEnqueue(&gRunningProcessQ, currpcb);
-							currpcb->m_ticks = 0;
-
-							// swap out the page tables
-							swapPageTable(currpcb);
-							memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-							return;
-							}
-						}
-					}
-				break;
-        	default:
-            // all others are not implemented syscalls are not implemented.
-        break;
+			{
+				int clock_ticks = ctx->regs[0];
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				ctx->regs[0] = kernelDelay(clock_ticks);
+			}
+		break;
 		case YALNIX_TTY_READ:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -313,6 +284,9 @@ void interruptKernel(UserContext* ctx)
 			int id = ctx->regs[0];
 			ctx->regs[0] = kernelReclaim(id);
 		}
+		break;
+		default:
+			// all others are not implemented syscalls are not implemented.
 		break;
 	}
 }

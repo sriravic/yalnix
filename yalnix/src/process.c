@@ -159,20 +159,23 @@ ExitData* exitDataDequeue(EDQueue* Q)
 
 void freePCB(PCB* pcb)
 {
-    freeRegionOneFrames(pcb);
+    freeRegionOneFrames(pcb);   // TODO fix these
     freeKernelStackFrames(pcb);
     exitDataFree(pcb->m_edQ);     // free exit data queue
     SAFE_FREE(pcb->m_uctx);
     SAFE_FREE(pcb->m_kctx);
     SAFE_FREE(pcb->m_pagetable);
-    SAFE_FREE(pcb->m_pt);
     SAFE_FREE(pcb);
 }
 
 void freeExitedProcesses()
 {
-    PCB* curr = getHeadProcess(&gExitedQ);
-
+    PCB* toBeDeleted;
+    while(gExitedQ.m_size > 0)
+    {
+        toBeDeleted = processDequeue(&gExitedQ);
+        freePCB(toBeDeleted);
+    }
 }
 
 void exitDataEnqueue(EDQueue* Q, ExitData* exitData)

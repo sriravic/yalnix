@@ -26,19 +26,21 @@ int kernelFork(void)
     memset(nextpt, 0, sizeof(UserProgPageTable));
     UserProgPageTable* currpt = currpcb->m_pagetable;
     UserContext* nextuctx = (UserContext*)malloc(sizeof(UserContext));
+    EDQueue* newEdQ = (EDQueue*)malloc(sizeof(EDQueue));
+    memset(newEdQ, 0, sizeof(EDQueue));
 
     if(nextpcb != NULL && nextpt != NULL && nextuctx != NULL)
     {
         // initialize this pcb
         nextpcb->m_pid = gPID++;
         nextpcb->m_ppid = currpcb->m_pid;
-        nextpcb->m_state = PROCESS_READY;
         nextpcb->m_ticks = 0;
         nextpcb->m_timeToSleep = 0;
         nextpcb->m_pagetable = nextpt;
         nextpcb->m_brk = currpcb->m_brk;
         memcpy(nextuctx, currpcb->m_uctx, sizeof(UserContext));
         nextpcb->m_uctx = nextuctx;
+        nextpcb->m_edQ = newEdQ;
         int pg;
 
         // Now process each region1 page
@@ -150,7 +152,6 @@ int kernelExec(char *name, char **args)
     if(currpcb != NULL && currpt != NULL)
     {
         // clear some entries in the pcb
-        currpcb->m_state = PROCESS_RUNNING;
         currpcb->m_ticks = 0;
         currpcb->m_timeToSleep = 0;
 
@@ -483,6 +484,14 @@ void kernelExit(int status, UserContext* ctx)
 
         // put the exit data into the parents exit data queue
         exitDataEnqueue(parentpcb->m_edQ, exitData);
+
+        // If the parent was waiting on the exited process, move it to the ready to run queue
+        parentpcb = getPcbByPid(&gWaitProcessQ, currpcb->m_ppid);
+        if(parentpcb != NULL)
+        {
+            processRemove(&gWaitProcessQ, parentpcb);
+            processEnqueue(&gReadyToRunProcessQ, parentpcb);
+        }
     }
 
     // move the pcb to the terminated queue so that the kernel can free it later
@@ -518,7 +527,7 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
     // if for some reason a process gets woken up erroneously, it will just go back to sleep.
     while(exitData == NULL)
     {
-        TracePrintf(2, "Process waiting for a child to exit\n");
+        //TracePrintf(2, "Process waiting for a child to exit\n");
 
         // ******SCHEDULER******
         // no exited children but running children, so move it to gWaitProcessQ and context switch
@@ -553,28 +562,6 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
     int pid = exitData->m_pid;
     free(exitData);
     return pid;
-
-    // temp code end
-    /*
-    else if (exitData == NULL)
-    {
-        // no exited children but running children, so move it to gWaitProcessQ
-        processEnqueue(&gWaitProcessQ, currPCB);
-        processDequeue(&gRunningProcessQ);
-        // TODO, context switch here instead
-
-        // when this process picks up again, it should have a new exit data to returns
-        exitData = exitDataDequeue(currPCB->m_edQ);
-        *status_ptr = -1;
-        return ERROR;   // not sure what to return in this case
-    }
-    else
-    {
-        // success
-        *status_ptr = exitData->m_status;
-        return exitData->m_pid;
-    }
-    */
 }
 
 int kernelGetPid(void) {
@@ -674,9 +661,26 @@ int kernelDelay(int clock_ticks)
         // Move the running process to the sleep queue
         PCB* currPCB = getHeadProcess(&gRunningProcessQ);
         currPCB->m_timeToSleep = clock_ticks;
+
         processDequeue(&gRunningProcessQ);
         processEnqueue(&gSleepBlockedQ, currPCB);
-        TracePrintf(2, "Process PID is %d\n", currPCB->m_pid);
+
+        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(0, "Kernel Context switch failed\n");
+            exit(-1);
+        }
+        processRemove(&gReadyToRunProcessQ, currpcb);
+        processEnqueue(&gRunningProcessQ, currpcb);
+        currpcb->m_ticks = 0;
+
+        // swap out the page tables
+        swapPageTable(currpcb);
+        memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+
         return SUCCESS;
     }
 }

@@ -14,26 +14,13 @@
 extern int gPID;            // the global pid counter that can be given to executing processes
 extern void* gKernelBrk;    // the global kernel brk
 
-enum ProcessState
-{
-    PROCESS_START,
-    PROCESS_READY,
-    PROCESS_RUNNING,
-    PROCESS_WAIT,
-    PROCESS_TERMINATED
-};
-
-typedef enum ProcessState ProcessState;
-
 // The process control block is the central structure that allows for the kernel to manage the processes.
 struct ProcessControlBlock
 {
     int m_pid;                                      //  process id of the current running process
     int m_ppid;                                     //  process id of the parent
-    ProcessState m_state;                           //  state of the process
     UserContext* m_uctx;                            //  pointer to the user context
     KernelContext* m_kctx;                          //  pointer to the kernel context;
-    PageTable* m_pt;                                //  pointer to the page table for the process
     UserProgPageTable* m_pagetable;                 //  pointer to the actual user mode page table.
     unsigned int m_brk;                             // the brk location of this process.
     unsigned int m_ticks;                           // increment the number of ticks this process has been running for
@@ -41,7 +28,6 @@ struct ProcessControlBlock
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
     struct ExitDataQueue* m_edQ;                    // singly linked list of exit data
-    void* m_iodata;                                 // pointer to a datastructure that we use to handle io for processes
 };
 
 typedef struct ProcessControlBlock PCB;
