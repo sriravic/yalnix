@@ -458,6 +458,11 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	WriteRegister(REG_VM_ENABLE, 1);
 	gVMemEnabled = 1;
 
+	// check for if init is given as the running process to start
+	int initArg = -1;
+	if(strcmp(argv[0], "init") == 0)
+		initArg = 0;
+
 	// Load the init program
 	// Create a page table for the new idle process
 	UserProgPageTable* pInitPT = (UserProgPageTable*)malloc(sizeof(PageTable));
@@ -521,7 +526,20 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	setR1PageTableAlone(pInitPCB);
 
 	// Call load program
-	int statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
+	// if initArg was not set, then init program is default
+	int statusCode;
+	if(initArg == 0)
+	{
+		TracePrintf(1, "INFO: Yalnix started with init as arguments\n");
+		statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
+	}
+	else
+	{
+		TracePrintf(1, "INFO: Yalnix was NOT started with init as argument\n");
+		char initprog[] = "init";
+		char* initargs[] = {NULL};
+		statusCode = LoadProgram(initprog, initargs, pInitPCB);
+	}
 
 	if(statusCode != SUCCESS)
 	{
@@ -593,13 +611,23 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// reset to idle's pagetables for successfulyl loading
 	setR1PageTableAlone(pIdlePCB);
 
-	char idleprog[] = "testexit";
-	char* tempargs[] = {NULL};
-	statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
+	if(initArg == 0)
+	{
+		// yalnix was called with init as input
+		// use any other process
+		char idleprog[] = "testterminal";
+		char* tempargs[] = {NULL};
+		statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
+	}
+	else
+	{
+		statusCode = LoadProgram(argv[0], &argv[1], pIdlePCB);
+	}
+
 
 	if(statusCode != SUCCESS)
 	{
-		TracePrintf(0, "Error loading the idle process\n");
+		TracePrintf(0, "Error loading the second process\n");
 		uctx = NULL;
 		return;
 	}

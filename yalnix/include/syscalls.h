@@ -13,7 +13,7 @@ extern int kernelDelay(int clock_ticks);
 extern int kernelTtyRead(int tty_id, void *buf, int len);
 extern int kernelTtyWrite(int tty_id, void *buf, int len);
 extern int kernelPipeInit(int *pipe_idp);
-extern int kernelPipeRead(int pipe_id, void *buf, int len, int* actuallyRead);
+extern int kernelPipeRead(int pipe_id, void *buf, int len);
 extern int kernelPipeWrite(int pipe_id, void *buf, int len);
 extern int kernelLockInit(int *lock_idp);
 extern int kernelAcquire(int lock_id, UserContext* ctx);

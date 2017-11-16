@@ -314,20 +314,21 @@ int getSyncIdOnly(int compoundId)
 }
 
 // adds a new entry in the global pipe lists
-void pipeEnqueue(int uid)
+int pipeEnqueue(int uid)
 {
     PipeQueueNode* node = (PipeQueueNode*)malloc(sizeof(PipeQueueNode));
     node->m_pipe = (Pipe*)malloc(sizeof(Pipe));
     if(node->m_pipe != NULL)
     {
-        node->m_pipe->m_len = 0;
-        node->m_pipe->m_validLength = 0;
-        node->m_pipe->m_buffer = NULL;
+        node->m_pipe->m_wLength = 0;
+        node->m_pipe->m_buffer = (void*)malloc(sizeof(char) * PIPE_BUFFER_LEN);
+        if(node->m_pipe->m_buffer == NULL) return -1;
         node->m_pipe->m_id = uid;
     }
     else
     {
         TracePrintf(0, "Error allocating space for pipe entry\n");
+        return -1;
     }
 
     // do queue operations
@@ -345,7 +346,7 @@ void pipeEnqueue(int uid)
         node->m_next = NULL;
         gPipeQueue.m_tail = node;
     }
-
+    return 0;
 }
 
 PipeQueueNode* getPipeNode(int pipeId)
@@ -389,44 +390,49 @@ int pipeReadWaitEnqueue(int id, int len, PCB* pcb, void* buff)
         TracePrintf(0, "Error allocating memory for pipe read wait queue node\n");
         return ERROR;
     }
+    return 0;
 }
 
-void processPendingPipeReadRequests()
+PipeReadWaitQueueNode* removePipeReadWaitNode(int id, PCB* pcb)
 {
-    PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-    PipeReadWaitQueueNode* node = gPipeReadWaitQueue.m_head;
-    if(node != NULL)
+    PipeReadWaitQueueNode* prev = gPipeReadWaitQueue.m_head;
+    PipeReadWaitQueueNode* curr = prev;
+    while(curr != NULL && curr->m_pcb != pcb && curr->m_id != id)
     {
-        do {
-            int pipeid = node->m_id;
-            PipeQueueNode* pipeNode = getPipeNode(pipeid);
-            if(pipeNode != NULL)
+        prev = curr;
+        curr = curr->m_next;
+    }
+
+    if(curr != NULL)
+    {
+        prev->m_next = curr->m_next;
+        curr->m_next = NULL;
+        return curr;
+    }
+    return NULL;
+}
+
+void processPendingPipeReadRequests(int pipeid, int currlen)
+{
+    PipeReadWaitQueueNode* prev = gPipeReadWaitQueue.m_head;
+    PipeReadWaitQueueNode* curr = prev;
+    while(curr != NULL)
+    {
+        // check if any process is waiting on this pipe data
+        if(curr->m_id == pipeid)
+        {
+            if(currlen >= curr->m_len)
             {
-                Pipe* pipe = pipeNode->m_pipe;
-                int requested = node->m_len;
-                int available = pipe->m_validLength;
-                if(requested <= available)
-                {
-                    // we have the requested bytes
-                    // temporarily swap the page pagetables
-                    // and copy the contents into the processes address space
-                    swapPageTable(node->m_pcb);
-                    memcpy(node->m_buf, pipe->m_buffer, sizeof(requested));
-                }
-                else
-                {
-                    // We did not get enough
-                    // break and try again later
-                    break;
-                }
+                // we can move this process to the ready to run queue
+                PCB* wpcb = curr->m_pcb;
+                processEnqueue(&gReadyToRunProcessQ, wpcb);
+                // this node will be free'd upon by the process when it wakes up
+                break;
             }
-            else
-            {
-                // pipe was not found
-                // goto next nodes
-                node = node->m_next;
-            }
-        } while(node != NULL);
+        }
+
+        prev = curr;
+        curr = curr->m_next;
     }
 }
 
