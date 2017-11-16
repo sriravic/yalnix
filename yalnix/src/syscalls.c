@@ -457,7 +457,7 @@ void kernelExit(int status, UserContext* ctx)
     }
 
     // get the parent PCB of the calling process if it exists
-    // TODO also need to search all lock waiting, cvar waiting, and ttyread waiting queues
+    // TODO also need to search all ttyread waiting queues
     PCB* parentpcb = getPcbByPid(&gReadyToRunProcessQ, currpcb->m_ppid);
     if(parentpcb == NULL)
     {
@@ -466,6 +466,14 @@ void kernelExit(int status, UserContext* ctx)
     if(parentpcb == NULL)
     {
         parentpcb = getPcbByPid(&gWaitProcessQ, currpcb->m_ppid);
+    }
+    if(parentpcb == NULL)
+    {
+        parentpcb = getPcbByPidInLocks(currpcb->m_ppid);
+    }
+    if(parentpcb == NULL)
+    {
+        parentpcb = getPcbByPidInCVars(currpcb->m_ppid);
     }
 
     // if the process has a parent, save its exit data into its parents list
@@ -512,8 +520,10 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
     bool hasChildProcess =
         getChildOfPpid(&gReadyToRunProcessQ, currpcb->m_pid) != NULL ||
         getChildOfPpid(&gWaitProcessQ, currpcb->m_pid) != NULL ||
-        getChildOfPpid(&gSleepBlockedQ, currpcb->m_pid) != NULL;
-        // TODO also need to search all lock waiting, cvar waiting, and ttyread waiting queues
+        getChildOfPpid(&gSleepBlockedQ, currpcb->m_pid) != NULL ||
+        getPcbByPidInLocks(currpcb->m_pid) != NULL ||
+        getPcbByPidInCVars(currpcb->m_pid) != NULL;
+        // TODO also need to search all ttyread waiting queues
 
     if (!hasChildProcess && exitData == NULL)
     {

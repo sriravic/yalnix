@@ -112,34 +112,32 @@ void freeOneFrame(FrameTableEntry* availPool, FrameTableEntry* usedPool, unsigne
 
 void freeRegionOneFrames(PCB* pcb)
 {
-    UserProgPageTable* pt = pcb->m_pagetable;
-    int pageNumber;
+    UserProgPageTable* pagetable = pcb->m_pagetable;
 
     // invalidate all the pages for region 1
-    // R1 starts from VMEM_1_BASE >> 1 till NUM_VPN
+    int pageNumber;
     for(pageNumber = 0; pageNumber < gNumPagesR1; pageNumber++)
     {
-        if(pt->m_pte[pageNumber].valid == 1)
+        if(pagetable->m_pte[pageNumber].valid == 1)
         {
-            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[pageNumber].pfn);
-            pt->m_pte[pageNumber].valid = 0;
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pagetable->m_pte[pageNumber].pfn);
+            pagetable->m_pte[pageNumber].valid = 0;
         }
     }
 }
 
 void freeKernelStackFrames(PCB* pcb)
 {
-    int pageNumber;
-    int r0kernelPages = DOWN_TO_PAGE(KERNEL_STACK_BASE) / PAGESIZE;
-    int r0StackPages = DOWN_TO_PAGE(KERNEL_STACK_LIMIT) / PAGESIZE;
-    UserProgPageTable* pt = pcb->m_pagetable;
+    UserProgPageTable* pagetable = pcb->m_pagetable;
 
-    for(pageNumber = r0kernelPages; pageNumber < r0StackPages; pageNumber++)
+    // invalidate all the pages for the kernel's stack
+    int pageNumber;
+    for(pageNumber = 0; pageNumber < gKStackPages; pageNumber++)
     {
-        if(pt->m_pte[pageNumber].valid == 1)
+        if(pagetable->m_pte[pageNumber].valid == 1)
         {
-            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pt->m_pte[pageNumber].pfn);
-            pt->m_pte[pageNumber].valid = 0;
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pagetable->m_pte[pageNumber].pfn);
+            pagetable->m_pte[pageNumber].valid = 0;
         }
     }
 }

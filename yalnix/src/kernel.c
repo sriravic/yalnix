@@ -615,7 +615,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	{
 		// yalnix was called with init as input
 		// use any other process
-		char idleprog[] = "testterminal";
+		char idleprog[] = "torture";
 		char* tempargs[] = {NULL};
 		statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 	}

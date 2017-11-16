@@ -117,6 +117,21 @@ PCB* getPcbByPidInLocks(int pid)
     return NULL;
 }
 
+PCB* getPcbByPidInCVars(int pid)
+{
+    CVarQueueNode* cvarNode = gCVarQueue.m_head;
+    PCB* pcb = NULL;
+    while(cvarNode != NULL)
+    {
+        pcb = getPcbByPid(cvarNode->m_waitingQueue, pid);
+        if(pcb != NULL)
+        {
+            return pcb;
+        }
+        cvarNode = cvarNode->m_next;
+    }
+    return NULL;
+}
 
 // return the first PCB that is a child of the given ppid, or NULL if there is not one
 PCB* getChildOfPpid(PCBQueue* Q, int ppid)
@@ -148,6 +163,22 @@ PCB* getChildOfPpidInLocks(int ppid)
             return pcb;
         }
         lockNode = lockNode->m_next;
+    }
+    return NULL;
+}
+
+PCB* getChildOfPpidInCVars(int ppid)
+{
+    CVarQueueNode* cvarNode = gCVarQueue.m_head;
+    PCB* pcb = NULL;
+    while(cvarNode != NULL)
+    {
+        pcb = getChildOfPpid(cvarNode->m_waitingQueue, ppid);
+        if(pcb != NULL)
+        {
+            return pcb;
+        }
+        cvarNode = cvarNode->m_next;
     }
     return NULL;
 }

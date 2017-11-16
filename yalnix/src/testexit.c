@@ -20,7 +20,7 @@ int main(int argc, char** argv)
     {
         TracePrintf(0, "Parent process %d will wait with one child but no exited children.\n", pid);
         rc = Wait(&status);
-        TracePrintf(0, "Parent process %d done waiting: expected rc=0, actual rc=%d. Expected status=17, actual status=%d.\n", pid, rc, status);
+        TracePrintf(0, "Parent process %d done waiting: expected rc=(child's pid), actual rc=%d. Expected status=17, actual status=%d.\n", pid, rc, status);
     }
 
     return 0;
