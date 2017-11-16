@@ -32,3 +32,7 @@ yalnix/src/testcvar
 yalnix/src/testreclaim
 yalnix/src/torture
 yalnix/src/testexit
+yalnix/src/bigstack
+yalnix/src/forktest
+yalnix/src/testvfork
+yalnix/src/zero
