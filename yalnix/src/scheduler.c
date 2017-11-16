@@ -3,6 +3,9 @@
 */
 
 #include <process.h>
+#include <yalnix.h>
+
+extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 void scheduleSleepingProcesses()
 {
@@ -18,4 +21,36 @@ void scheduleSleepingProcesses()
 		}
         sleepingPCB = sleepingPCBNext;
 	}
+}
+
+int scheduler(PCBQueue* destQueue, PCB* currpcb, UserContext* ctx, char* errormessage)
+{
+    processDequeue(&gRunningProcessQ);
+    processEnqueue(destQueue, currpcb);
+
+    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+    if(nextpcb != NULL)
+    {
+        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(0, "Kernel Context switch failed\n");
+            exit(-1);
+        }
+    }
+    else
+    {
+        TracePrintf(0, "ERROR: no pcb in %c\n", errormessage);
+        Halt();
+    }
+
+    processRemove(&gReadyToRunProcessQ, currpcb);
+    processEnqueue(&gRunningProcessQ, currpcb);
+    currpcb->m_ticks = 0;
+
+    // swap out the page tables
+    swapPageTable(currpcb);
+    memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+    return SUCCESS;
 }

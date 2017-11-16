@@ -224,7 +224,7 @@ ExitData* exitDataDequeue(EDQueue* Q)
 
 void freePCB(PCB* pcb)
 {
-    freeRegionOneFrames(pcb);   // TODO fix these
+    freeRegionOneFrames(pcb); 
     freeKernelStackFrames(pcb);
     exitDataFree(pcb->m_edQ);     // free exit data queue
     SAFE_FREE(pcb->m_uctx);
