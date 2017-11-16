@@ -100,8 +100,7 @@ int kernelFork(void)
         // remove the temporary used frame
         freeOneFrame(&gFreeFramePool, &gUsedFramePool, temporary->m_frameNumber);
         gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 0;
-        free(temporary);
-
+        
         // allocate two frames for kernel stack frame
         FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
         FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
