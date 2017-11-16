@@ -134,10 +134,10 @@ void freeKernelStackFrames(PCB* pcb)
     int pageNumber;
     for(pageNumber = 0; pageNumber < gKStackPages; pageNumber++)
     {
-        if(pagetable->m_pte[pageNumber].valid == 1)
+        if(pagetable->m_kstack[pageNumber].valid == 1)
         {
-            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pagetable->m_pte[pageNumber].pfn);
-            pagetable->m_pte[pageNumber].valid = 0;
+            freeOneFrame(&gFreeFramePool, &gUsedFramePool, pagetable->m_kstack[pageNumber].pfn);
+            pagetable->m_kstack[pageNumber].valid = 0;
         }
     }
 }

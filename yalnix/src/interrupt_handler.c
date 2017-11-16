@@ -310,8 +310,9 @@ void interruptIllegal(UserContext* ctx)
 {
 	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
 	TracePrintf(0, "Illegal Interrupt Happened.\nKilling Process : %d\n", currpcb->m_pid);
-	// move the process to dead queue
-	// inform any waiting parent of this processes state.
+
+	int status = ctx->regs[0];
+	kernelExit(status, ctx);
 }
 
 // Interrupt handler for memory
@@ -377,7 +378,7 @@ void interruptMemory(UserContext* ctx)
 		{
 			TracePrintf(0, "User program stack region exhausted and might grow into heap.!\n");
 			TracePrintf(0, "Not allocating the requested page\n");
-			// TODO: kill the process and move it to terminated queue.
+			kernelExit(ctx->regs[0], ctx);
 		}
 	}
 	else
@@ -389,49 +390,10 @@ void interruptMemory(UserContext* ctx)
 // Interrupt handler for math traps
 void interruptMath(UserContext* ctx)
 {
-	/*
 	// check the status of the register for what caused this math traps
 	// report to user and abort the process
-	PCB* currPCB = getHeadProcess(&gRunningProcessQ);
-	TracePrintf(2, "Error: illegal math operation. Killing process %d.\n", currPCB->m_pid);
-	kernelExit(ctx->code);
-
-	// exit happened, so we context switch
-	// do a context switch here
-	// Remove the process from the running queue
-	currPCB = processDequeue(&gRunningProcessQ);
-	PCB* nextPCB = processDequeue(&gReadyToRunProcessQ);
-	//currpcb->m_ticks = 0;
-	nextPCB->m_ticks = 0;
-	if(nextPCB != NULL)
-	{
-		int rc = KernelContextSwitch(SwitchKCS, nextPCB, currPCB);
-		if(rc == -1)
-		{
-			TracePrintf(0, "Context switch failed");
-		}
-
-		//processRemove(&gRunningProcessQ, currpcb);
-		//processEnqueue(&gWriteBlockedQ, currpcb);
-		processEnqueue(&gRunningProcessQ, nextPCB);
-		swapPageTable(nextPCB);
-		memcpy(ctx, nextPCB->m_uctx, sizeof(UserContext));
-		return;
-	}
-	else
-	{
-		TracePrintf(0, "Error: No process to run.!!\n");
-	}
-
-	// Free all the memory associated with the process (exit data and PCB) R1 pages, R2 pages
-	freeRegionOneFrames(currPCB);
-	freeKernelStackFrames(currPCB);
-	exitDataFree(currPCB->m_edQ);     // free exit data queue
-	free(currPCB->m_uctx);
-	free(currPCB->m_kctx);
-	free(currPCB->m_pt);
-	free(currPCB);
-	*/
+	int status = ctx->regs[0];
+	kernelExit(status, ctx);
 }
 
 // Interrupt Handler for terminal recieve

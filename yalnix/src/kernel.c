@@ -612,10 +612,11 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	setR1PageTableAlone(pIdlePCB);
 
 	if(initArg == 0)
+
 	{
 		// yalnix was called with init as input
 		// use any other process
-		char idleprog[] = "torture";
+		char idleprog[] = "idle";
 		char* tempargs[] = {NULL};
 		statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 	}

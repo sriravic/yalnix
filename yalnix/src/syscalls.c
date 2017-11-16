@@ -106,7 +106,7 @@ int kernelFork(void)
         FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
         FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
         nextpcb->m_pagetable->m_kstack[0].valid = 1; nextpcb->m_pagetable->m_kstack[0].prot = PROT_READ | PROT_WRITE; nextpcb->m_pagetable->m_kstack[0].pfn = kstack1->m_frameNumber;
-        nextpcb->m_pagetable->m_kstack[1].valid = 1; nextpcb->m_pagetable->m_kstack[1].prot = PROT_READ | PROT_WRITE; nextpcb->m_pagetable->m_kstack[1].pfn = kstack1->m_frameNumber;
+        nextpcb->m_pagetable->m_kstack[1].valid = 1; nextpcb->m_pagetable->m_kstack[1].prot = PROT_READ | PROT_WRITE; nextpcb->m_pagetable->m_kstack[1].pfn = kstack2->m_frameNumber;
 
         int rc = KernelContextSwitch(GetKCS, nextpcb, NULL);
         if(rc == -1)
