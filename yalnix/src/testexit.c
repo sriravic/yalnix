@@ -23,5 +23,25 @@ int main(int argc, char** argv)
         TracePrintf(0, "Parent process %d done waiting: expected rc=(child's pid), actual rc=%d. Expected status=17, actual status=%d.\n", pid, rc, status);
     }
 
+    TracePrintf(0, "Parent process %d will now spawn 5 children that will exit.\n", pid);
+    int fork_num = 5;
+    int i;
+    for(i = 1; i <= fork_num; i++)
+    {
+        fork_rc = Fork();
+        if(fork_rc == 0)
+        {
+            TracePrintf(0, "Child process fork %d will now exit.\n", i);
+            Exit(i);
+        }
+    }
+
+    TracePrintf(0, "Parent process %d will wait on its 5 children.\n", pid);
+    for(i = 1; i <= fork_num; i++)
+    {
+        rc = Wait(&status);
+        TracePrintf(0, "Parent process %d done waiting: rc=%d, status=%d.\n", pid, rc, status);
+    }
+
     return 0;
 }

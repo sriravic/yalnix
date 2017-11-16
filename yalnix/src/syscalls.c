@@ -119,7 +119,7 @@ int kernelFork(void)
         if(gRunningProcessQ.m_head == NULL)
         {
             // The child woke up suddenly and found it can start running.!
-            TracePrintf(0, "INFO: Waking up as the child.\n");
+            //TracePrintf(0, "INFO: Waking up as the child.\n");
             swapPageTable(nextpcb);
             nextpcb->m_uctx->regs[0] = 0;
             processRemove(&gReadyToRunProcessQ, nextpcb);
