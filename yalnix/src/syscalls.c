@@ -122,6 +122,7 @@ int kernelFork(void)
             //TracePrintf(0, "INFO: Waking up as the child.\n");
             swapPageTable(nextpcb);
             nextpcb->m_uctx->regs[0] = 0;
+            nextpcb->m_ticks = 0;
             processRemove(&gReadyToRunProcessQ, nextpcb);
             processEnqueue(&gRunningProcessQ, nextpcb);
             return SUCCESS;
@@ -508,8 +509,17 @@ void kernelExit(int status, UserContext* ctx)
 
     // half context switch because we will never come back
     PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-    KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+    if(nextpcb != NULL)
+    {
+        memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+        // TODO: handle failure case
+        KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+    }
+    else
+    {
+        TracePrintf(0, "ERROR: No PCB - Inside : KernelExit\n");
+        Halt();
+    }
 }
 
 // Wait
@@ -546,15 +556,22 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
 
         PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
         memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-        if(rc == -1)
+        // TODO: Handle the failure case of context switch gracefully.
+        if(nextpcb != NULL)
         {
-            TracePrintf(0, "Kernel Context switch failed\n");
-            exit(-1);
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "Kernel Context switch failed\n");
+                exit(-1);
+            }
+        }
+        else
+        {
+            TracePrintf(0, "ERROR: No PCB - Inside : KernelWait\n");
         }
         processRemove(&gReadyToRunProcessQ, currpcb);
         processEnqueue(&gRunningProcessQ, currpcb);
-        currpcb->m_ticks = 0;
 
         // swap out the page tables
         swapPageTable(currpcb);
@@ -621,7 +638,7 @@ int kernelBrk(void *addr)
             {
                 unsigned int pfn = frame->m_frameNumber;
                 currpt->m_pte[brkPgNum+i].valid = 1; currpt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currpt->m_pte[brkPgNum+i].pfn = pfn;
-                TracePrintf(2, "The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+                TracePrintf(4, "INFO: The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
             }
             else
             {
@@ -677,15 +694,23 @@ int kernelDelay(int clock_ticks, UserContext* ctx)
 
         PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
         memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-        if(rc == -1)
+        // NOTE: Handle this failure case gracefully.
+        if(nextpcb != NULL)
         {
-            TracePrintf(0, "Kernel Context switch failed\n");
-            exit(-1);
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "Kernel Context switch failed\n");
+                exit(-1);
+            }
         }
+        else
+        {
+            TracePrintf(0, "ERROR: No PCB - Inside : KernelDelay\n");
+        }
+
         processRemove(&gReadyToRunProcessQ, currpcb);
         processEnqueue(&gRunningProcessQ, currpcb);
-        currpcb->m_ticks = 0;
 
         // swap out the page tables
         swapPageTable(currpcb);
@@ -736,20 +761,28 @@ int kernelTtyRead(int tty_id, void *buf, int len)
             processRemove(&gRunningProcessQ, currpcb);
             processEnqueue(&gReadBlockedQ, currpcb);
             PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
+            if(nextpcb != NULL)
             {
-                TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
-
-                // remove this node from gTermWReqHeads queue
-                if(removeTerminalRequest(tty_id, req) != 0)
+                int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+                if(rc == -1)
                 {
-                    TracePrintf(1, "ERROR: Removing the request failed\n");
+                    TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+
+                    // remove this node from gTermWReqHeads queue
+                    if(removeTerminalRequest(tty_id, req) != 0)
+                    {
+                        TracePrintf(1, "ERROR: Removing the request failed\n");
+                    }
+                    processRemove(&gReadBlockedQ, currpcb);
+                    processEnqueue(&gRunningProcessQ, currpcb);
+                    swapPageTable(currpcb);
+                    currpcb->m_ticks = 0;
+                    return -1;
                 }
-                processRemove(&gReadBlockedQ, currpcb);
-                processEnqueue(&gRunningProcessQ, currpcb);
-                swapPageTable(currpcb);
-                return -1;
+            }
+            else
+            {
+                TracePrintf(0, "ERROR: No PCB - Inside : kernelTtyRead\n");
             }
 
             // we just got awoke
@@ -796,13 +829,33 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
 
     TerminalRequest* head = &gTermWReqHeads[tty_id];
 
-    // find the first empty slot
-    TerminalRequest* curr = head;
-    TerminalRequest* next = curr->m_next;
-    while(next != NULL)
+    // if the head's next pointer is not null, then it means some other process is currently writing
+    // context switch till its get done by spinning till you get a chance
+    while(head->m_next != NULL)
     {
-        curr = next;
-        next = curr->m_next;
+        processRemove(&gRunningProcessQ, currpcb);
+        processEnqueue(&gReadyToRunProcessQ, currpcb);
+        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+        if(nextpcb != NULL)
+        {
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+                processRemove(&gReadyToRunProcessQ, currpcb);
+                processEnqueue(&gRunningProcessQ, currpcb);
+                swapPageTable(currpcb);
+                currpcb->m_ticks = 0;
+                return -1;
+            }
+        }
+        else
+        {
+            TracePrintf(0, "ERROR: No PCB in : kernelTtyWrite\n");
+        }
+        processRemove(&gReadyToRunProcessQ, currpcb);
+        processEnqueue(&gRunningProcessQ, currpcb);
+        swapPageTable(currpcb);
     }
 
     // create the new entry for this request
@@ -816,7 +869,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
         if(req->m_bufferR0 != NULL)
         {
             // append the request to the queue of request
-            curr->m_next = req;
+            head->m_next = req;
             memcpy(req->m_bufferR0, buf, sizeof(char) * len);
             req->m_len = len;
             req->m_serviced = 0;
@@ -836,20 +889,28 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 processRemove(&gRunningProcessQ, currpcb);
                 processEnqueue(&gWriteBlockedQ, currpcb);
                 PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-                int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-                if(rc == -1)
+                if(nextpcb != NULL)
                 {
-                    TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
-
-                    // remove this node from gTermWReqHeads queue
-                    if(removeTerminalRequest(tty_id, req) != 0)
+                    int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+                    if(rc == -1)
                     {
-                        TracePrintf(1, "ERROR: Removing the request failed\n");
+                        TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+
+                        // remove this node from gTermWReqHeads queue
+                        if(removeTerminalRequest(tty_id, req) != 0)
+                        {
+                            TracePrintf(1, "ERROR: Removing the request failed\n");
+                        }
+                        processRemove(&gWriteBlockedQ, currpcb);
+                        processEnqueue(&gRunningProcessQ, currpcb);
+                        swapPageTable(currpcb);
+                        currpcb->m_ticks = 0;
+                        return -1;
                     }
-                    processRemove(&gWriteBlockedQ, currpcb);
-                    processEnqueue(&gRunningProcessQ, currpcb);
-                    swapPageTable(currpcb);
-                    return -1;
+                }
+                else
+                {
+                    TracePrintf(0, "ERROR: No PCB in : kernelTtyWrite\n");
                 }
 
                 // we wake up after we have written successfully to terminal
@@ -919,16 +980,25 @@ int kernelPipeRead(int pipe_id, void *buf, int len)
                 swapPageTable(currpcb);
                 return ERROR;
             }
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
+
+            if(nextpcb != NULL)
             {
-                TracePrintf(0, "ERROR: Context switch failed\n");
-                //undo the operations
-                PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
-                SAFE_FREE(node);
-                processEnqueue(&gRunningProcessQ, currpcb);
-                swapPageTable(currpcb);
-                return ERROR;
+                int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+                if(rc == -1)
+                {
+                    TracePrintf(0, "ERROR: Context switch failed\n");
+                    //undo the operations
+                    PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
+                    SAFE_FREE(node);
+                    processEnqueue(&gRunningProcessQ, currpcb);
+                    swapPageTable(currpcb);
+                    currpcb->m_ticks = 0;
+                    return ERROR;
+                }
+            }
+            else
+            {
+                TracePrintf(0, "ERROR: No PCB - In : kernelPipeRead\n");
             }
             // we are awoken kernelExit
             PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
@@ -1027,11 +1097,18 @@ int kernelAcquire(int lock_id, UserContext* ctx)
         // calling process is now waiting on a lock, so context switch here
         PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
         memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-        if(rc == -1)
+        if(nextpcb != NULL)
         {
-            TracePrintf(0, "Kernel Context switch failed\n");
-            exit(-1);
+            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+            if(rc == -1)
+            {
+                TracePrintf(0, "Kernel Context switch failed\n");
+                exit(-1);
+            }
+        }
+        else
+        {
+            TracePrintf(0, "ERROR : NO PCB - In : kernelAcquire\n");
         }
         processRemove(&gReadyToRunProcessQ, currpcb);
         processEnqueue(&gRunningProcessQ, currpcb);
@@ -1169,11 +1246,19 @@ int kernelCvarWait(int cvar_id, int lock_id, UserContext* ctx)
     // run another process while waiting to be notified by a CvarSignal or CvarBroadcast
     PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
     memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-    int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-    if(rc == -1)
+    int rc;
+    if(nextpcb != NULL)
     {
-        TracePrintf(0, "Kernel Context switch failed\n");
-        exit(-1);
+        rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(0, "Kernel Context switch failed\n");
+            exit(-1);
+        }
+    }
+    else
+    {
+        TracePrintf(0, "ERROR: NO PCB - IN: kernelCvarWait\n");
     }
     processRemove(&gReadyToRunProcessQ, currpcb);
     processEnqueue(&gRunningProcessQ, currpcb);

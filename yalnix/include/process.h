@@ -50,6 +50,7 @@ extern PCBQueue gTerminatedProcessQ;
 extern PCBQueue gSleepBlockedQ;
 extern PCBQueue gWriteBlockedQ;
 extern PCBQueue gWriteFinishedQ;
+extern PCBQueue gWriteWaitQ;                    // waiting for a chance to write to a terminal
 extern PCBQueue gReadBlockedQ;
 extern PCBQueue gReadFinishedQ;
 extern PCBQueue gExitedQ;
