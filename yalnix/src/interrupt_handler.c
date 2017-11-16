@@ -500,6 +500,7 @@ void interruptTtyTransmit(UserContext* ctx)
 		PCB* pcb = req->m_pcb;
 		processRemove(&gWriteBlockedQ, pcb);
 		processEnqueue(&gReadyToRunProcessQ, pcb);
+		head->m_next = NULL;								// free this guy.!
 	}
 	return;
 }

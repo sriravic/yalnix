@@ -716,7 +716,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
                     TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
 
                     // remove this node from gTermWReqHeads queue
-                    if(removeTerminalRequest(tty_id, req) != 0)
+                    if(removeTerminalRequest(req) != 0)
                     {
                         TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
                     }
@@ -750,7 +750,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
     }
 
     read = toread;
-    if(removeTerminalRequest(tty_id, req) != 0)
+    if(removeTerminalRequest(req) != 0)
         TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
     return read;
 }
@@ -846,7 +846,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                         TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
 
                         // remove this node from gTermWReqHeads queue
-                        if(removeTerminalRequest(tty_id, req) != 0)
+                        if(removeTerminalRequest(req) != 0)
                         {
                             TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
                         }
@@ -863,7 +863,28 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 }
 
                 // we wake up after we have written successfully to terminal
+                // someone put you in readytoun queue
+                // but someone else might be running here
+                // so spin.!
                 processRemove(&gReadyToRunProcessQ, currpcb);
+                while(head->m_next != NULL)
+                {
+                    processEnqueue(&gReadyToRunProcessQ, currpcb);
+                    PCB* spinnext = getHeadProcess(&gReadyToRunProcessQ);
+                    int sc = KernelContextSwitch(SwitchKCS, currpcb, spinnext);
+                    if(sc == -1)
+                    {
+                        TracePrintf(SEVERE, "ERROR: Could not spin and context switch\n");
+                        processRemove(&gReadyToRunProcessQ, currpcb);
+                        processEnqueue(&gRunningProcessQ, currpcb);
+                        swapPageTable(currpcb);
+                        currpcb->m_ticks = 0;
+                        return ERROR;
+                    }
+                    processRemove(&gReadyToRunProcessQ, currpcb);
+                    processEnqueue(&gRunningProcessQ, currpcb);
+                    swapPageTable(currpcb);
+                }
                 processEnqueue(&gRunningProcessQ, currpcb);
                 swapPageTable(currpcb);
                 req->m_serviced += toSend;
@@ -884,7 +905,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
 
     // remove the request from the queue and associated Memory
     int serviced = req->m_serviced;
-    if(removeTerminalRequest(tty_id, req) != 0)
+    if(removeTerminalRequest(req) != 0)
         TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
 
     // return the amount that was serviced

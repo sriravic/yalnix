@@ -11,7 +11,7 @@ char *argv[];
     if ((pid = Fork()) == 0)
     {
       TracePrintf(0,"CHILD\n");
-      recurse("child", 5, 2);
+      recurse("child", 5, 1);
     }
     else
     {

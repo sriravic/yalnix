@@ -42,6 +42,6 @@ extern TerminalRequest gTermRReqHeads[NUM_TERMINALS];
 
 // removes a  request from the queues
 // returns 0 on success, -1 on error
-int removeTerminalRequest(int tty_id, TerminalRequest* req);
+int removeTerminalRequest(TerminalRequest* req);
 
 #endif
