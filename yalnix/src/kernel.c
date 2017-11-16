@@ -50,6 +50,7 @@ PCBQueue gReadBlockedQ;
 PCBQueue gReadFinishedQ;
 PCBQueue gWriteBlockedQ;
 PCBQueue gWriteFinishedQ;
+PCBQueue gWriteWaitQ;
 PCBQueue gExitedQ;
 
 // The global synchronization queues
@@ -226,6 +227,7 @@ KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_
 			gKernelPageTable.m_pte[gKStackPg0 + 0].pfn = nextpcb->m_pagetable->m_kstack[0].pfn;
 			gKernelPageTable.m_pte[gKStackPg0 + 1].pfn = nextpcb->m_pagetable->m_kstack[1].pfn;
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
+			nextpcb->m_ticks = 0;
 			return nextpcb->m_kctx;
 		}
 		else { TracePrintf(0, "ERROR: No return kernel context was found in nextpcb\n"); return NULL; }
@@ -413,6 +415,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	INIT_QUEUE_HEADS(gReadFinishedQ);
 	INIT_QUEUE_HEADS(gWriteBlockedQ);
 	INIT_QUEUE_HEADS(gWriteFinishedQ);
+	INIT_QUEUE_HEADS(gWriteWaitQ);
 	INIT_QUEUE_HEADS(gExitedQ);
 
 	// create initial synchronization queues

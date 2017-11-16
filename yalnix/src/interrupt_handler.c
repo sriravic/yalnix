@@ -80,7 +80,8 @@ void interruptKernel(UserContext* ctx)
             {
 				void* addr = (void *)ctx->regs[0];
 				TracePrintf(2, "Brk address is: %x\n", addr);
-            	kernelBrk(addr);
+            	int rc = kernelBrk(addr);
+				ctx->regs[0] = rc;
             }
         break;
         case YALNIX_GETPID:
@@ -287,15 +288,21 @@ void interruptClock(UserContext* ctx)
 			processDequeue(&gRunningProcessQ);
 			processEnqueue(&gReadyToRunProcessQ, currpcb);
 			PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-			if(rc == -1)
+			if(nextpcb != NULL)
 			{
-				TracePrintf(0, "Kernel Context switch failed\n");
-				exit(-1);
+				int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+				if(rc == -1)
+				{
+					TracePrintf(0, "Kernel Context switch failed\n");
+					exit(-1);
+				}
+			}
+			else
+			{
+				TracePrintf(0, "ERROR: Didnot find another process to schedule - Inside : INTERRUPT_CLOCK\n");
 			}
 
 			// We just awoke.! Reset my time
-			currpcb->m_ticks = 0;
 			processRemove(&gReadyToRunProcessQ, currpcb);					// remove the process that was picked to run
 			processEnqueue(&gRunningProcessQ, currpcb);
 			swapPageTable(currpcb);
@@ -326,9 +333,8 @@ void interruptMemory(UserContext* ctx)
 	int code = ctx->code;
 	if(code == YALNIX_ACCERR)
 	{
-		TracePrintf(0, "Memory trap for a page with invalid access permissions\n");
-		// TODO: How to handle this???
-		return;
+		TracePrintf(0, "Memtrap for a page with invalid access permissions. Killing the process\n");
+		kernelExit(ERROR, ctx);
 	}
 
 	// compute the locations of the page from the top of the VM
@@ -414,10 +420,17 @@ void interruptTtyReceive(UserContext* ctx)
 		int read = TtyReceive(tty_id, req->m_bufferR0, TERMINAL_MAX_LINE);
 		req->m_serviced = read;
 		PCB* nextpcb = req->m_pcb;
-		int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-		if(rc == -1)
+		if(nextpcb != NULL)
 		{
-			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+			if(rc == -1)
+			{
+				TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+			}
+		}
+		else
+		{
+			TracePrintf(0, "ERROR: No pcb to schedule : Inside : TTY_RECEIVE\n");
 		}
 	}
 
@@ -433,22 +446,32 @@ void interruptTtyReceive(UserContext* ctx)
 // Interrupt Handler for terminal transmit
 void interruptTtyTransmit(UserContext* ctx)
 {
+	// some request was completed.
+	// find that process and put it in ready to run queue
 	int tty_id = ctx->code;
+
 	// put the current running process into ready to run queues
+	/*
 	PCB* currpcb = processDequeue(&gRunningProcessQ);
 	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 	processEnqueue(&gReadyToRunProcessQ, currpcb);
 
 	// pick the process that was doing a service requests
-	TerminalRequest* head = &gTermWReqHeads[tty_id];
-	TerminalRequest* req = head->m_next;
+
 	if(req != NULL)
 	{
 		PCB* nextpcb = req->m_pcb;
-		int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-		if(rc == -1)
+		if(nextpcb != NULL)
 		{
-			TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+			if(rc == -1)
+			{
+				TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
+			}
+		}
+		else
+		{
+			TracePrintf(0, "ERROR: No PCB - Inside : TTY_TRANSMIT\n");
 		}
 	}
 
@@ -457,8 +480,17 @@ void interruptTtyTransmit(UserContext* ctx)
 	processRemove(&gReadyToRunProcessQ, currpcb);
 	processEnqueue(&gRunningProcessQ, currpcb);
 	swapPageTable(currpcb);
-	currpcb->m_ticks = 0;
 	memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+	return;
+	*/
+	TerminalRequest* head = &gTermWReqHeads[tty_id];
+	TerminalRequest* req = head->m_next;
+	if(req != NULL)
+	{
+		PCB* pcb = req->m_pcb;
+		processRemove(&gWriteBlockedQ, pcb);
+		processEnqueue(&gReadyToRunProcessQ, pcb);
+	}
 	return;
 }
 
