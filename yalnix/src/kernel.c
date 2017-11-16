@@ -521,6 +521,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pInitPCB->m_next 		= NULL;
 	pInitPCB->m_prev 		= NULL;
 	pInitPCB->m_edQ 		= initEDQ;
+	pInitPCB->m_name 		= NULL;
 
 	// add init to the running process
 	processEnqueue(&gRunningProcessQ, pInitPCB);
@@ -534,6 +535,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	if(initArg == 0)
 	{
 		TracePrintf(1, "INFO: Yalnix started with init as arguments\n");
+		int namelen = strlen(argv[0]);
+		pInitPCB->m_name = (void*)malloc(sizeof(char) * namelen);
+		if(pInitPCB->m_name != NULL) memcpy(pInitPCB->m_name, argv[0], namelen);
 		statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
 	}
 	else
@@ -541,6 +545,9 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		TracePrintf(1, "INFO: Yalnix was NOT started with init as argument\n");
 		char initprog[] = "init";
 		char* initargs[] = {NULL};
+		int namelen = strlen(initprog);
+		pInitPCB->m_name = (void*)malloc(sizeof(char) * namelen);
+		if(pInitPCB->m_name != NULL) memcpy(pInitPCB->m_name, initprog, namelen);
 		statusCode = LoadProgram(initprog, initargs, pInitPCB);
 	}
 
@@ -610,6 +617,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	pIdlePCB->m_next 		= NULL;
 	pIdlePCB->m_prev 		= NULL;
 	pIdlePCB->m_edQ 		= idleEDQ;
+	pIdlePCB->m_name		= NULL;
 
 	// reset to idle's pagetables for successfulyl loading
 	setR1PageTableAlone(pIdlePCB);
@@ -621,10 +629,16 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		// use any other process
 		char idleprog[] = "idle";
 		char* tempargs[] = {NULL};
+		int namelen = strlen(idleprog);
+		pIdlePCB->m_name = (void*)malloc(sizeof(char) * namelen);
+		if(pIdlePCB->m_name != NULL) memcpy(pIdlePCB->m_name, idleprog, namelen);
 		statusCode = LoadProgram(idleprog, tempargs, pIdlePCB);
 	}
 	else
 	{
+		int namelen = strlen(argv[0]);
+		pIdlePCB->m_name = (void*)malloc(sizeof(char) * namelen);
+		if(pIdlePCB->m_name != NULL) memcpy(pIdlePCB->m_name, argv[0], namelen);
 		statusCode = LoadProgram(argv[0], &argv[1], pIdlePCB);
 	}
 

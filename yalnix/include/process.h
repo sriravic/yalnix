@@ -28,6 +28,7 @@ struct ProcessControlBlock
     struct ProcessControlBlock* m_next;             // doubly linked list next pointers
     struct ProcessControlBlock* m_prev;             // doubly linked list prev pointers
     struct ExitDataQueue* m_edQ;                    // singly linked list of exit data
+    char* m_name;                                   // name of the process
 };
 
 typedef struct ProcessControlBlock PCB;

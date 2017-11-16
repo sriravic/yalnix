@@ -256,6 +256,15 @@ void interruptKernel(UserContext* ctx)
 				return;
 			}
 		break;
+		case YALNIX_CUSTOM_0:
+			{
+				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+				int tty_id = ctx->regs[0];
+				ctx->regs[0] = kernelPS(tty_id);
+				return;
+			}
+		break;
 		default:
 			// all others are not implemented syscalls are not implemented.
 		break;
@@ -272,6 +281,7 @@ void interruptClock(UserContext* ctx)
 	TracePrintf(3, "TRAP_CLOCK\n");
 
 	scheduleSleepingProcesses();
+	processPendingPipeReadRequests();
 	freeExitedProcesses();			// free the resources associated with exited processes
 
 	// update the quantum of runtime for the current running process

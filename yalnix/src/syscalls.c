@@ -15,6 +15,16 @@ extern void* gTerminalBuffer[NUM_TERMINALS];
 extern KernelContext* GetKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
+#define MAX_STATUS_LEN 18
+char strRunning[]       = {"RUNNING       : \n"};
+char strReady[]         = {"READY         : \n"};
+char strReadBlocked[]   = {"READ_BLOCKED  : \n"};
+char strSleepBlocked[]  = {"SLEEP_BLOCKED : \n"};
+char strWaiting[]       = {"WAITING       : \n"};
+char strLocked[]        = {"LOCK_WAITING  : \n"};
+char strCVar[]          = {"CVAR_WAITING  : \n"};
+char strPipeWait[]      = {"PIPE_WAITING  : \n"};
+
 // Fork handles the creation of a new process. It is the only way to create a new process in Yalnix
 int kernelFork(void)
 {
@@ -41,6 +51,8 @@ int kernelFork(void)
         memcpy(nextuctx, currpcb->m_uctx, sizeof(UserContext));
         nextpcb->m_uctx = nextuctx;
         nextpcb->m_edQ = newEdQ;
+        nextpcb->m_name = (void*)malloc(sizeof(char) * strlen(currpcb->m_name));
+        if(nextpcb->m_name != NULL ) memcpy(nextpcb->m_name, currpcb->m_name, strlen(currpcb->m_name));
         int pg;
 
         // Now process each region1 page
@@ -100,7 +112,7 @@ int kernelFork(void)
         // remove the temporary used frame
         freeOneFrame(&gFreeFramePool, &gUsedFramePool, temporary->m_frameNumber);
         gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 0;
-        
+
         // allocate two frames for kernel stack frame
         FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
         FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
@@ -148,7 +160,9 @@ int kernelExec(char *name, char **args)
     // Get the pcb of the calling process
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     UserProgPageTable* currpt = currpcb->m_pagetable;
-
+    SAFE_FREE(currpcb->m_name);
+    currpcb->m_name = (void*)malloc(sizeof(char) * strlen(name));
+    if(currpcb->m_name != NULL) memcpy(currpcb->m_name, name, strlen(name));
     if(currpcb != NULL && currpt != NULL)
     {
         // clear some entries in the pcb
@@ -505,7 +519,7 @@ void kernelExit(int status, UserContext* ctx)
     char* errormessage = "kernelExit";
     scheduler(&gExitedQ, currpcb, ctx, errormessage);
 
-    TracePrintf("SERIOUS ERROR: An exited process should not come back to life.\n");
+    TracePrintf(0, "SERIOUS ERROR: An exited process should not come back to life.\n");
     Halt();
 }
 
@@ -1204,6 +1218,32 @@ int kernelReclaim(int id) {
     }
     else
     {
+        return ERROR;
+    }
+}
+
+int kernelPS(int tty_id)
+{
+    if(tty_id < NUM_TERMINALS)
+    {
+        // running queue
+
+        // ready to run queue
+
+        // read blocked queue
+
+        // write blocked queue
+
+        // cvar waiting queue
+
+        //
+
+
+        return SUCCESS;
+    }
+    else
+    {
+        TracePrintf(0, "ERROR: invalid terminal number\n");
         return ERROR;
     }
 }

@@ -191,6 +191,9 @@ extern int Custom0 _PARAMS((int,int,int,int));
 extern int Custom1 _PARAMS((int,int,int,int));
 extern int Custom2 _PARAMS((int,int,int,int));
 
+// custom syscall
+#define PS(tty_id) (Custom0(tty_id,0,0,0))
+
 /*
  * A Yalnix library function: TtyPrintf(num, format, args) works like
  * printf(format, args) on terminal num.
