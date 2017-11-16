@@ -100,7 +100,7 @@ int kernelFork(void)
         // remove the temporary used frame
         freeOneFrame(&gFreeFramePool, &gUsedFramePool, temporary->m_frameNumber);
         gKernelPageTable.m_pte[gKStackPg0 - 1].valid = 0;
-        
+
         // allocate two frames for kernel stack frame
         FrameTableEntry* kstack1 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
         FrameTableEntry* kstack2 = getOneFreeFrame(&gFreeFramePool, &gUsedFramePool);
@@ -110,7 +110,7 @@ int kernelFork(void)
         int rc = KernelContextSwitch(GetKCS, nextpcb, NULL);
         if(rc == -1)
         {
-            TracePrintf(0, "ERROR: Unable to get kernel stack for child\n");
+            TracePrintf(MODERATE, "ERROR: Unable to get kernel stack for child\n");
             return ERROR;
         }
 
@@ -118,7 +118,7 @@ int kernelFork(void)
         if(gRunningProcessQ.m_head == NULL)
         {
             // The child woke up suddenly and found it can start running.!
-            //TracePrintf(0, "INFO: Waking up as the child.\n");
+            TracePrintf(DEBUG, "INFO: Waking up as the child.\n");
             swapPageTable(nextpcb);
             nextpcb->m_uctx->regs[0] = 0;
             nextpcb->m_ticks = 0;
@@ -136,7 +136,7 @@ int kernelFork(void)
     }
     else
     {
-        TracePrintf(0, "Error creating PCB/pagetable for the fork child process");
+        TracePrintf(MODERATE, "Error creating PCB/pagetable for the fork child process");
         return ERROR;
     }
     return ERROR;
@@ -176,18 +176,18 @@ int kernelExec(char *name, char **args)
         * Open the executable file
         */
          if ((fd = open(name, O_RDONLY)) < 0) {
-             TracePrintf(0, "LoadProgram: can't open file '%s'\n", name);
+             TracePrintf(MODERATE, "LoadProgram: can't open file '%s'\n", name);
              return ERROR;
          }
 
          if (LoadInfo(fd, &li) != LI_NO_ERROR) {
-             TracePrintf(0, "LoadProgram: '%s' not in Yalnix format\n", name);
+             TracePrintf(MODERATE, "LoadProgram: '%s' not in Yalnix format\n", name);
              close(fd);
-             return (-1);
+             return ERROR;
          }
 
          if (li.entry < VMEM_1_BASE) {
-             TracePrintf(0, "LoadProgram: '%s' not linked for Yalnix\n", name);
+             TracePrintf(MODERATE, "LoadProgram: '%s' not linked for Yalnix\n", name);
              close(fd);
              return ERROR;
          }
@@ -207,12 +207,12 @@ int kernelExec(char *name, char **args)
          size = 0;
          for (i = 0; args[i] != NULL; i++)
          {
-             TracePrintf(3, "counting arg %d = '%s'\n", i, args[i]);
+             TracePrintf(DEBUG, "counting arg %d = '%s'\n", i, args[i]);
              size += strlen(args[i]) + 1;
          }
          argcount = i;
 
-         TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
+         TracePrintf(DEBUG, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
 
          /*
          *  The arguments will get copied starting at "cp", and the argv
@@ -236,14 +236,14 @@ int kernelExec(char *name, char **args)
          */
          cp2 = (caddr_t)cpp - INITIAL_STACK_FRAME_SIZE;
 
-         TracePrintf(1, "prog_size %d, text %d data %d bss %d pages\n",
+         TracePrintf(DEBUG, "prog_size %d, text %d data %d bss %d pages\n",
          li.t_npg + data_npg, li.t_npg, li.id_npg, li.ud_npg);
 
          /*
          * Compute how many pages we need for the stack */
          stack_npg = (VMEM_1_LIMIT - DOWN_TO_PAGE(cp2)) >> PAGESHIFT;
 
-         TracePrintf(1, "LoadProgram: heap_size %d, stack_size %d\n",
+         TracePrintf(DEBUG, "LoadProgram: heap_size %d, stack_size %d\n",
              li.t_npg + data_npg, stack_npg);
 
 
@@ -274,14 +274,14 @@ int kernelExec(char *name, char **args)
          {
              for (i = 0; args[i] != NULL; i++)
              {
-                 TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
+                 TracePrintf(DEBUG, "saving arg %d = '%s'\n", i, args[i]);
                  strcpy(cp2, args[i]);
                  cp2 += strlen(cp2) + 1;
              }
          }
          else
          {
-             TracePrintf(0, "Unable to allocate space for new program for arguments\n");
+             TracePrintf(MODERATE, "Unable to allocate space for new program for arguments\n");
              return ERROR;
          }
 
@@ -360,7 +360,7 @@ int kernelExec(char *name, char **args)
          if (code != segment_size)
          {
              close(fd);
-             TracePrintf(0, "Copy program text failed\n");
+             TracePrintf(SEVERE, "Copy program text failed\n");
              // KILL is not defined anywhere: it is an error code distinct
              // from ERROR because it requires different action in the caller.
              // Since this error code is internal to your kernel, you get to define it.
@@ -376,7 +376,7 @@ int kernelExec(char *name, char **args)
          if (read(fd, (void *) li.id_vaddr, segment_size) != segment_size)
          {
              close(fd);
-             TracePrintf(0, "Copy program data failed\n");
+             TracePrintf(SEVERE, "Copy program data failed\n");
              return KILL;
          }
 
@@ -452,7 +452,7 @@ void kernelExit(int status, UserContext* ctx)
     if(currpcb->m_pid == 0)
     {
         // If init exits, halt the system
-        TracePrintf(0, "INIT EXITED SO HALTING THE SYSTEM\n");
+        TracePrintf(SEVERE, "INIT EXITED SO HALTING THE SYSTEM\n");
         Halt();
     }
 
@@ -483,7 +483,7 @@ void kernelExit(int status, UserContext* ctx)
         ExitData* exitData = (ExitData*)malloc(sizeof(ExitData));
         if(exitData == NULL)
         {
-            TracePrintf(0, "Failed to malloc for exit data\n");
+            TracePrintf(SEVERE, "Failed to malloc for exit data\n");
             // serious issue- the machine has no memory left so we have to halt since we cannot return
             Halt();
         }
@@ -505,7 +505,7 @@ void kernelExit(int status, UserContext* ctx)
     char* errormessage = "kernelExit";
     scheduler(&gExitedQ, currpcb, ctx, errormessage);
 
-    TracePrintf("SERIOUS ERROR: An exited process should not come back to life.\n");
+    TracePrintf(SEVERE, "SERIOUS ERROR: An exited process should not come back to life.\n");
     Halt();
 }
 
@@ -543,7 +543,6 @@ int kernelWait(int *status_ptr, UserContext* ctx) {
     }
 
     // success
-    TracePrintf(2, "Process successfully got a child's exit data.\n");
     *status_ptr = exitData->m_status;
     int pid = exitData->m_pid;
     free(exitData);
@@ -578,7 +577,7 @@ int kernelBrk(void *addr)
 
     // reset brkpg num to offsetted page within r1
     brkPgNum -= gNumPagesR0;
-    TracePrintf(3, "INFO: The current brk page is: %d\n", brkPgNum);
+    TracePrintf(DEBUG, "INFO: The current brk page is: %d\n", brkPgNum);
     unsigned int delta;
     unsigned int pgDiff;
     int i;
@@ -597,11 +596,11 @@ int kernelBrk(void *addr)
             {
                 unsigned int pfn = frame->m_frameNumber;
                 currpt->m_pte[brkPgNum+i].valid = 1; currpt->m_pte[brkPgNum+i].prot = PROT_READ | PROT_WRITE; currpt->m_pte[brkPgNum+i].pfn = pfn;
-                TracePrintf(4, "INFO: The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
+                TracePrintf(DEBUG, "INFO: The allocated page number is %d and the frame number is %d\n", brkPgNum+i, pfn);
             }
             else
             {
-                TracePrintf(0, "Could not find free frames\n");
+                TracePrintf(MODERATE, "Could not find free frames\n");
                 return ERROR;
             }
         }
@@ -617,11 +616,11 @@ int kernelBrk(void *addr)
             currpt->m_pte[brkPgNum - i].prot = PROT_NONE;
             int pfn = currpt->m_pte[brkPgNum - i].pfn;
             freeOneFrame(&gFreeFramePool, &gUsedFramePool, pfn);
-            TracePrintf(2, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
+            TracePrintf(DEBUG, "The freed page number is %d and the frame number is %d\n", brkPgNum-i, pfn);
         }
     }
 
-    TracePrintf(3, "INFO: The page difference is: %d\n", pgDiff);
+    TracePrintf(DEBUG, "INFO: The page difference is: %d\n", pgDiff);
 
     // set the brk to be the new address
     currpcb->m_brk = newAddr;
@@ -633,7 +632,7 @@ int kernelBrk(void *addr)
 // Delay pauses the process for a time of clock_ticks
 int kernelDelay(int clock_ticks, UserContext* ctx)
 {
-    TracePrintf(0, "kernalDelay called\n");
+    TracePrintf(DEBUG, "kernalDelay called\n");
     if(clock_ticks < 0)
     {
         return ERROR;
@@ -700,12 +699,12 @@ int kernelTtyRead(int tty_id, void *buf, int len)
                 int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
                 if(rc == -1)
                 {
-                    TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+                    TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
 
                     // remove this node from gTermWReqHeads queue
                     if(removeTerminalRequest(tty_id, req) != 0)
                     {
-                        TracePrintf(1, "ERROR: Removing the request failed\n");
+                        TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
                     }
                     processRemove(&gReadBlockedQ, currpcb);
                     processEnqueue(&gRunningProcessQ, currpcb);
@@ -716,7 +715,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
             }
             else
             {
-                TracePrintf(0, "ERROR: No PCB - Inside : kernelTtyRead\n");
+                TracePrintf(SEVERE, "ERROR: No PCB - Inside : kernelTtyRead\n");
             }
 
             // we just got awoke
@@ -732,13 +731,13 @@ int kernelTtyRead(int tty_id, void *buf, int len)
     }
     else
     {
-        TracePrintf(0, "ERROR: Unable to allocate memory for read request\n");
-        return -1;
+        TracePrintf(MODERATE, "ERROR: Unable to allocate memory for read request\n");
+        return ERROR;
     }
 
     read = toread;
     if(removeTerminalRequest(tty_id, req) != 0)
-        TracePrintf(1, "ERROR: Removing the request failed\n");
+        TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
     return read;
 }
 
@@ -773,20 +772,20 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
         if(nextpcb != NULL)
         {
             int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == -1)
+            if(rc == ERROR)
             {
-                TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+                TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
                 processRemove(&gReadyToRunProcessQ, currpcb);
                 processEnqueue(&gRunningProcessQ, currpcb);
                 swapPageTable(currpcb);
                 currpcb->m_ticks = 0;
-                return -1;
+                return ERROR;
             }
-            TracePrintf(2, "INFO: PID : %d is about to try to terminal \n", currpcb->m_pid);
+            TracePrintf(DEBUG, "INFO: PID : %d is about to try to terminal \n", currpcb->m_pid);
         }
         else
         {
-            TracePrintf(0, "ERROR: No PCB in : kernelTtyWrite\n");
+            TracePrintf(DEBUG, "ERROR: No PCB in : kernelTtyWrite\n");
         }
         processRemove(&gReadyToRunProcessQ, currpcb);
         processEnqueue(&gRunningProcessQ, currpcb);
@@ -794,7 +793,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
     }
 
     // create the new entry for this request
-    TracePrintf(2, "INFO: PID : %d is about do a terminal write\n", currpcb->m_pid);
+    TracePrintf(DEBUG, "INFO: PID : %d is about do a terminal write\n", currpcb->m_pid);
     TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
     if(req != NULL)
     {
@@ -830,12 +829,12 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                     int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
                     if(rc == -1)
                     {
-                        TracePrintf(0, "Context switch failed in terminal write. Returning without writing\n");
+                        TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
 
                         // remove this node from gTermWReqHeads queue
                         if(removeTerminalRequest(tty_id, req) != 0)
                         {
-                            TracePrintf(1, "ERROR: Removing the request failed\n");
+                            TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
                         }
                         processRemove(&gWriteBlockedQ, currpcb);
                         processEnqueue(&gRunningProcessQ, currpcb);
@@ -846,7 +845,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
                 }
                 else
                 {
-                    TracePrintf(0, "ERROR: No PCB in : kernelTtyWrite\n");
+                    TracePrintf(SEVERE, "ERROR: No PCB in : kernelTtyWrite\n");
                 }
 
                 // we wake up after we have written successfully to terminal
@@ -858,21 +857,21 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
         }
         else
         {
-            TracePrintf(0, "Error could not allocate memory for storing the amount %d bytes within the request\n", len);
+            TracePrintf(MODERATE, "Error could not allocate memory for storing the amount %d bytes within the request\n", len);
             free(req);
-            return -1;
+            return ERROR;
         }
     }
     else
     {
-        TracePrintf(0, "Error: Couldnt allocate memory for terminal request");
-        return -1;
+        TracePrintf(MODERATE, "Error: Couldnt allocate memory for terminal request");
+        return ERROR;
     }
 
     // remove the request from the queue and associated Memory
     int serviced = req->m_serviced;
     if(removeTerminalRequest(tty_id, req) != 0)
-        TracePrintf(1, "ERROR: Removing the request failed\n");
+        TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
 
     // return the amount that was serviced
     return serviced;
@@ -898,7 +897,7 @@ int kernelPipeRead(int pipe_id, void *buf, int len)
     PipeQueueNode* pipeNode = getPipeNode(pipe_id);
     if(pipeNode == NULL)
     {
-        TracePrintf(0, "ERROR: Invalid pipe id provided\n");
+        TracePrintf(MODERATE, "ERROR: Invalid pipe id provided\n");
         return ERROR;
     }
     else
@@ -911,7 +910,7 @@ int kernelPipeRead(int pipe_id, void *buf, int len)
             PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
             if(pipeReadWaitEnqueue(pipe_id, len, currpcb, buf) != 0)
             {
-                TracePrintf(0, "ERROR: Unable to add to wait pipe queue\n");
+                TracePrintf(MODERATE, "ERROR: Unable to add to wait pipe queue\n");
                 processEnqueue(&gRunningProcessQ, currpcb);
                 swapPageTable(currpcb);
                 return ERROR;
@@ -922,7 +921,7 @@ int kernelPipeRead(int pipe_id, void *buf, int len)
                 int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
                 if(rc == -1)
                 {
-                    TracePrintf(0, "ERROR: Context switch failed\n");
+                    TracePrintf(SEVERE, "ERROR: Context switch failed\n");
                     //undo the operations
                     PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
                     SAFE_FREE(node);
@@ -934,7 +933,7 @@ int kernelPipeRead(int pipe_id, void *buf, int len)
             }
             else
             {
-                TracePrintf(0, "ERROR: No PCB - In : kernelPipeRead\n");
+                TracePrintf(SEVERE, "ERROR: No PCB - In : kernelPipeRead\n");
             }
             // we are awoken kernelExit
             PipeReadWaitQueueNode* node = removePipeReadWaitNode(pipe_id, currpcb);
@@ -961,7 +960,7 @@ int kernelPipeWrite(int pipe_id, void *buf, int len)
 	PipeQueueNode* pipeNode = getPipeNode(pipe_id);
     if(pipeNode == NULL)
     {
-        TracePrintf(0, "ERROR: Invalid pipe id provided\n");
+        TracePrintf(MODERATE, "ERROR: Invalid pipe id provided\n");
         return ERROR;
     }
     else
@@ -969,7 +968,7 @@ int kernelPipeWrite(int pipe_id, void *buf, int len)
         Pipe* p = pipeNode->m_pipe;
         if(p->m_wLength + len > PIPE_BUFFER_LEN)
         {
-            TracePrintf(0, "ERROR: Pipe is full\n");
+            TracePrintf(MODERATE, "ERROR: Pipe is full\n");
             return ERROR;
         }
         else
@@ -1168,7 +1167,7 @@ int kernelReclaim(int id) {
         LockQueueNode* lockNode = getLockNode(id);
         if(lockNode == NULL)
         {
-            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent lock\n");
+            TracePrintf(MODERATE, "ERROR: Invalid syscall to free a non-existent lock\n");
             return ERROR;
         }
         else
@@ -1181,7 +1180,7 @@ int kernelReclaim(int id) {
         CVarQueueNode* cvarNode = getCVarNode(id);
         if(cvarNode == NULL)
         {
-            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent cvar\n");
+            TracePrintf(MODERATE, "ERROR: Invalid syscall to free a non-existent cvar\n");
             return ERROR;
         }
         else
@@ -1194,7 +1193,7 @@ int kernelReclaim(int id) {
         PipeQueueNode* pipeNode = getPipeNode(id);
         if(pipeNode == NULL)
         {
-            TracePrintf(0, "ERROR: Invalid syscall to free a non-existent pipe\n");
+            TracePrintf(MODERATE, "ERROR: Invalid syscall to free a non-existent pipe\n");
             return ERROR;
         }
         else

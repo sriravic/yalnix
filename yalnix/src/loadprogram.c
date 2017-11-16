@@ -39,18 +39,18 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
    * Open the executable file
    */
     if ((fd = open(name, O_RDONLY)) < 0) {
-        TracePrintf(0, "LoadProgram: can't open file '%s'\n", name);
+        TracePrintf(MODERATE, "LoadProgram: can't open file '%s'\n", name);
         return ERROR;
     }
 
     if (LoadInfo(fd, &li) != LI_NO_ERROR) {
-        TracePrintf(0, "LoadProgram: '%s' not in Yalnix format\n", name);
+        TracePrintf(MODERATE, "LoadProgram: '%s' not in Yalnix format\n", name);
         close(fd);
-        return (-1);
+        return ERROR;
     }
 
     if (li.entry < VMEM_1_BASE) {
-        TracePrintf(0, "LoadProgram: '%s' not linked for Yalnix\n", name);
+        TracePrintf(MODERATE, "LoadProgram: '%s' not linked for Yalnix\n", name);
         close(fd);
         return ERROR;
     }
@@ -69,12 +69,12 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     */
     size = 0;
     for (i = 0; args[i] != NULL; i++) {
-        TracePrintf(3, "counting arg %d = '%s'\n", i, args[i]);
+        TracePrintf(DEBUG, "counting arg %d = '%s'\n", i, args[i]);
         size += strlen(args[i]) + 1;
     }
     argcount = i;
 
-    TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
+    TracePrintf(DEBUG, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
 
     /*
     *  The arguments will get copied starting at "cp", and the argv
@@ -98,14 +98,14 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     */
     cp2 = (caddr_t)cpp - INITIAL_STACK_FRAME_SIZE;
 
-    TracePrintf(1, "prog_size %d, text %d data %d bss %d pages\n",
+    TracePrintf(DEBUG, "prog_size %d, text %d data %d bss %d pages\n",
     li.t_npg + data_npg, li.t_npg, li.id_npg, li.ud_npg);
 
     /*
     * Compute how many pages we need for the stack */
     stack_npg = (VMEM_1_LIMIT - DOWN_TO_PAGE(cp2)) >> PAGESHIFT;
 
-    TracePrintf(1, "LoadProgram: heap_size %d, stack_size %d\n",
+    TracePrintf(DEBUG, "LoadProgram: heap_size %d, stack_size %d\n",
         li.t_npg + data_npg, stack_npg);
 
 
@@ -135,14 +135,14 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     {
         for (i = 0; args[i] != NULL; i++)
         {
-        TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
+        TracePrintf(DEBUG, "saving arg %d = '%s'\n", i, args[i]);
         strcpy(cp2, args[i]);
         cp2 += strlen(cp2) + 1;
         }
     }
     else
     {
-        TracePrintf(0, "Unable to allocate space for new program for arguments\n");
+        TracePrintf(MODERATE, "Unable to allocate space for new program for arguments\n");
         return ERROR;
     }
 
@@ -230,7 +230,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     if (read(fd, (void *) li.t_vaddr, segment_size) != segment_size)
     {
         close(fd);
-        TracePrintf(0, "Copy program text failed\n");
+        TracePrintf(SEVERE, "Copy program text failed\n");
         // KILL is not defined anywhere: it is an error code distinct
         // from ERROR because it requires different action in the caller.
         // Since this error code is internal to your kernel, you get to define it.
@@ -245,7 +245,7 @@ int LoadProgram(char *name, char *args[], PCB* pcb)
     if (read(fd, (void *) li.id_vaddr, segment_size) != segment_size)
     {
         close(fd);
-        TracePrintf(0, "Copy program data failed\n");
+        TracePrintf(SEVERE, "Copy program data failed\n");
         return KILL;
     }
 

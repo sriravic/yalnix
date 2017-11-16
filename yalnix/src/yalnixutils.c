@@ -12,7 +12,7 @@ FrameTableEntry* getOneFreeFrame(FrameTableEntry* availPool, FrameTableEntry* us
     // do one sanity check before proceeding
     if(prevA == NULL || prevU == NULL)
     {
-        TracePrintf(0, "Cannot get one free frame as header was NULL\n");
+        TracePrintf(MODERATE, "Cannot get one free frame as header was NULL\n");
         return NULL;
     }
 
@@ -49,7 +49,7 @@ FrameTableEntry* getNFreeFrames(FrameTableEntry* availPool, FrameTableEntry* use
         // do one sanity check before proceeding
         if(prevA == NULL || prevU == NULL)
         {
-            TracePrintf(0, "Cannot get one free frame as header was NULL\n");
+            TracePrintf(MODERATE, "Cannot get one free frame as header was NULL\n");
             return NULL;
         }
 

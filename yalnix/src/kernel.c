@@ -74,7 +74,7 @@ int SetKernelBrk(void* addr)
 	if(gVMemEnabled == -1)
 	{
 		// virtual memory has not yet been set.
-		TracePrintf(0, "SetKernelBrk : 0x%08X\n", addr);
+		TracePrintf(DEBUG, "SetKernelBrk : 0x%08X\n", addr);
 		gKernelBrk = addr;
 		return 0;
 	}
@@ -82,7 +82,7 @@ int SetKernelBrk(void* addr)
 	{
 		// virtual memory has been enabled.
 		// check for correct frames and update the kernel heap page tables
-		TracePrintf(2, "SetkernelBrk called after VM enabled\n");
+		TracePrintf(DEBUG, "SetkernelBrk called after VM enabled\n");
 		unsigned int newBrkAddr = (unsigned int)addr;
 		unsigned int oldBrkAddr = (unsigned int)gKernelBrk;
 		unsigned int oldBrkPg = oldBrkAddr / PAGESIZE;
@@ -103,14 +103,14 @@ int SetKernelBrk(void* addr)
 				}
 				else
 				{
-					TracePrintf(0, "Unable to find new frames for kernel brk\n");
+					TracePrintf(MODERATE, "Unable to find new frames for kernel brk\n");
 				}
 			}
 			WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_0);
 		}
 		else
 		{
-			TracePrintf(0, "Freeing up frames from R0 since brk was lower than original brk");
+			TracePrintf(DEBUG, "Freeing up frames from R0 since brk was lower than original brk");
 			int pg;
 			// Free up the phyiscal frames except the ones we have not allocated to before initializing the VM
 			for(pg = oldBrkPg; pg > oldBrkPg && pg > gNumFramesBeforeVM; pg--)
@@ -131,8 +131,8 @@ int SetKernelBrk(void* addr)
 void SetKernelData(void* _KernelDataStart, void* _KernelDataEnd)
 {
     gKernelBrk = _KernelDataEnd;
-    TracePrintf(0, "DataStart  : 0x%08X\n", _KernelDataStart);
-    TracePrintf(0, "DataEnd    : 0x%08X\n", _KernelDataEnd);
+    TracePrintf(DEBUG, "DataStart  : 0x%08X\n", _KernelDataStart);
+    TracePrintf(DEBUG, "DataEnd    : 0x%08X\n", _KernelDataEnd);
 
 	gKernelDataStart = (unsigned int)_KernelDataStart;
 	gKernelDataEnd = (unsigned int)_KernelDataEnd;
@@ -156,7 +156,7 @@ KernelContext* GetKCS(KernelContext* kc_in, void* next_pcb_p, void* dummy_pointe
 		}
 		else
 		{
-			TracePrintf(0, "ERROR: Could not allocate new memory for kernel context\n");
+			TracePrintf(MODERATE, "ERROR: Could not allocate new memory for kernel context\n");
 			return NULL;
 		}
 
@@ -200,13 +200,13 @@ KernelContext* GetKCS(KernelContext* kc_in, void* next_pcb_p, void* dummy_pointe
 		}
 		else
 		{
-			TracePrintf(0, "ERROR: Could not find one free frame for temporary purposes\n");
+			TracePrintf(MODERATE, "ERROR: Could not find one free frame for temporary purposes\n");
 			return NULL;
 		}
 	}
 	else
 	{
-		TracePrintf(0, "ERROR: currpcb was NULL\n");
+		TracePrintf(SEVERE, "ERROR: currpcb was NULL\n");
 		return NULL;
 	}
 	return NULL;
@@ -230,14 +230,14 @@ KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_
 			nextpcb->m_ticks = 0;
 			return nextpcb->m_kctx;
 		}
-		else { TracePrintf(0, "ERROR: No return kernel context was found in nextpcb\n"); return NULL; }
+		else { TracePrintf(SEVERE, "ERROR: No return kernel context was found in nextpcb\n"); return NULL; }
 	}
-	else { TracePrintf(0, "ERROR: one of the pcb's were null\n"); return NULL; }
+	else { TracePrintf(SEVERE, "ERROR: one of the pcb's were null\n"); return NULL; }
 }
 
 void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 {
-    TracePrintf(0, "KernelStart Function\n");
+    TracePrintf(DEBUG, "KernelStart Function\n");
 
 	// zero out the kernel page tables
 	int i;
@@ -247,10 +247,10 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
     int argc = 0;
     while(argv[argc] != NULL)
     {
-        TracePrintf(0, "\t Argv : %s\n", argv[argc++]);
+        TracePrintf(DEBUG, "\t Argv : %s\n", argv[argc++]);
     }
 
-	TracePrintf(0, "Available memory : %u MB\n", getMB(pmem_size));
+	TracePrintf(DEBUG, "Available memory : %u MB\n", getMB(pmem_size));
 
 	// initialize the IVT
 	// only 7 are valid
@@ -266,7 +266,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		gIVT[i] = (void*)interruptDummy;
 
 	unsigned int ivtBaseRegAddr = (unsigned int)(&(gIVT[0]));
-	TracePrintf(0, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
+	TracePrintf(DEBUG, "Base IVT Register address : 0x%08X\n", ivtBaseRegAddr);
 	WriteRegister(REG_VECTOR_BASE, ivtBaseRegAddr);
 
 	// map the initial page tables and frames
@@ -281,14 +281,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	unsigned int NUM_DATA_FRAMES_IN_USE = DATA_FRAME_END_PAGENUM - TEXT_FRAME_END_PAGENUM;
 	unsigned int NUM_FRAMES_IN_USE = DATA_FRAME_END_PAGENUM;
 
-	TracePrintf(0, "Data End Address : 0x%08x\n", dataEndRounded);
-	TracePrintf(0, "Global brk : 0x%08x\n",UP_TO_PAGE((unsigned int)gKernelBrk));
-	TracePrintf(0, "Text Frame End : %u\n", TEXT_FRAME_END_PAGENUM);
-	TracePrintf(0, "Data Frame End : %u\n", DATA_FRAME_END_PAGENUM);
+	TracePrintf(DEBUG, "Data End Address : 0x%08x\n", dataEndRounded);
+	TracePrintf(DEBUG, "Global brk : 0x%08x\n",UP_TO_PAGE((unsigned int)gKernelBrk));
+	TracePrintf(DEBUG, "Text Frame End : %u\n", TEXT_FRAME_END_PAGENUM);
+	TracePrintf(DEBUG, "Data Frame End : %u\n", DATA_FRAME_END_PAGENUM);
 
-	TracePrintf(0, "Total Physical Frames : %u\n", TOTAL_FRAMES);
-	TracePrintf(0, "Total Frames In USE : %u\n", NUM_FRAMES_IN_USE);
-	TracePrintf(0, "Total Remaining pages : %u\n", TOTAL_FRAMES - NUM_FRAMES_IN_USE);
+	TracePrintf(DEBUG, "Total Physical Frames : %u\n", TOTAL_FRAMES);
+	TracePrintf(DEBUG, "Total Frames In USE : %u\n", NUM_FRAMES_IN_USE);
+	TracePrintf(DEBUG, "Total Remaining pages : %u\n", TOTAL_FRAMES - NUM_FRAMES_IN_USE);
 
 	// first initialize the pools
 	gUsedFramePool.m_head = 1; gFreeFramePool.m_head = 1;
@@ -309,7 +309,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		}
 		else
 		{
-			TracePrintf(0, "Unable to allocate memory for used frame pool list - frame : %d\n", frameNum);
+			TracePrintf(SEVERE, "Unable to allocate memory for used frame pool list - frame : %d\n", frameNum);
 			exit(-1);
 		}
 	}
@@ -328,14 +328,14 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		}
 		else
 		{
-			TracePrintf(0, "Unable to allocate memory for free frame pool list - frame : %d\n", frameNum);
+			TracePrintf(SEVERE, "Unable to allocate memory for free frame pool list - frame : %d\n", frameNum);
 			exit(-1);
 		}
 	}
 
 	// update the heap allocations if any
 	unsigned int NUM_HEAP_FRAMES_IN_USE = (UP_TO_PAGE((unsigned int)gKernelBrk) - dataEndRounded) / PAGESIZE;
-	TracePrintf(0, "Total Heap Frames : %u\n", NUM_HEAP_FRAMES_IN_USE);
+	TracePrintf(DEBUG, "Total Heap Frames : %u\n", NUM_HEAP_FRAMES_IN_USE);
 
 	// Initialize the page tables for the kernel
 	// map the used pages to used frames as one-one mapping
@@ -355,7 +355,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	// Allocate one page for kernel stack region
 	// This has to be in the same spot
 	unsigned int stackIndex = (KERNEL_STACK_BASE / PAGESIZE);
-	TracePrintf(0, "Kernel stack index : %u\n", stackIndex);
+	TracePrintf(DEBUG, "Kernel stack index : %u\n", stackIndex);
 
 	// Find two frames that are in the free list at STACK_BASE and STACK_BASE - 1
 	// and move them to used list. and allocate the pte entries to these frames
@@ -370,8 +370,8 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			FrameTableEntry* f1 = curr;
 			FrameTableEntry* f2 = curr->m_next;
 
-			TracePrintf(0, "Stack Frame pfn : %u\n", f1->m_frameNumber);
-			TracePrintf(0, "Stack frame pfn : %u\n", f2->m_frameNumber);
+			TracePrintf(DEBUG, "Stack Frame pfn : %u\n", f1->m_frameNumber);
+			TracePrintf(DEBUG, "Stack frame pfn : %u\n", f2->m_frameNumber);
 
 			// reassign the pointers
 			prev->m_next = f2->m_next;
@@ -471,7 +471,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	UserProgPageTable* pInitPT = (UserProgPageTable*)malloc(sizeof(PageTable));
 	if(pInitPT == NULL)
 	{
-		TracePrintf(0, "unable to create page table for idle process");
+		TracePrintf(MODERATE, "unable to create page table for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -488,7 +488,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	PCB* pInitPCB = (PCB*)malloc(sizeof(PCB));
 	if(pInitPCB == NULL)
 	{
-		TracePrintf(0, "Unable to create pcb entry for idle process");
+		TracePrintf(MODERATE, "Unable to create pcb entry for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -497,7 +497,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	EDQueue* initEDQ = (EDQueue*)malloc(sizeof(EDQueue));
 	if(initEDQ == NULL)
 	{
-		TracePrintf(0, "Unable to create exit data queue for idle process");
+		TracePrintf(SEVERE, "Unable to create exit data queue for idle process");
 		exit(-1);
 	}
 
@@ -505,7 +505,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	UserContext* pInitUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pInitUC == NULL)
 	{
-		TracePrintf(0, "Unable to create user context for init process");
+		TracePrintf(MODERATE, "Unable to create user context for init process");
 		uctx = NULL;
 		return;
 	}
@@ -533,12 +533,12 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	int statusCode;
 	if(initArg == 0)
 	{
-		TracePrintf(1, "INFO: Yalnix started with init as arguments\n");
+		TracePrintf(DEBUG, "INFO: Yalnix started with init as arguments\n");
 		statusCode = LoadProgram(argv[0], &argv[1], pInitPCB);
 	}
 	else
 	{
-		TracePrintf(1, "INFO: Yalnix was NOT started with init as argument\n");
+		TracePrintf(DEBUG, "INFO: Yalnix was NOT started with init as argument\n");
 		char initprog[] = "init";
 		char* initargs[] = {NULL};
 		statusCode = LoadProgram(initprog, initargs, pInitPCB);
@@ -546,7 +546,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	if(statusCode != SUCCESS)
 	{
-		TracePrintf(0, "Error loading the init process\n");
+		TracePrintf(MODERATE, "Error loading the init process\n");
 		uctx = NULL;
 		return;
 	}
@@ -555,7 +555,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	UserProgPageTable* pIdlePT = (UserProgPageTable*)malloc(sizeof(PageTable));
 	if(pIdlePT == NULL)
 	{
-		TracePrintf(0, "unable to create page table for idle process");
+		TracePrintf(MODERATE, "unable to create page table for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -576,7 +576,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	PCB* pIdlePCB = (PCB*)malloc(sizeof(PCB));
 	if(pIdlePCB == NULL)
 	{
-		TracePrintf(0, "Unable to create pcb entry for idle process");
+		TracePrintf(MODERATE, "Unable to create pcb entry for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -585,7 +585,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	EDQueue* idleEDQ = (EDQueue*)malloc(sizeof(EDQueue));
 	if(idleEDQ == NULL)
 	{
-		TracePrintf(0, "Unable to create exit data queue for idle process");
+		TracePrintf(MODERATE, "Unable to create exit data queue for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -594,7 +594,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 	UserContext* pIdleUC = (UserContext*)malloc(sizeof(UserContext));
 	if(pIdleUC == NULL)
 	{
-		TracePrintf(0, "Unable to create user context for idle process");
+		TracePrintf(MODERATE, "Unable to create user context for idle process");
 		uctx = NULL;
 		return;
 	}
@@ -631,7 +631,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 
 	if(statusCode != SUCCESS)
 	{
-		TracePrintf(0, "Error loading the second process\n");
+		TracePrintf(MODERATE, "Error loading the second process\n");
 		uctx = NULL;
 		return;
 	}
@@ -643,7 +643,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 		int rc = KernelContextSwitch(GetKCS, pIdlePCB, NULL);
 		if(rc == -1)
 		{
-			TracePrintf(0, "ERROR: Unable to get the first kernel context and stack frames\n");
+			TracePrintf(MODERATE, "ERROR: Unable to get the first kernel context and stack frames\n");
 			uctx = NULL;
 			return;
 		}
@@ -654,7 +654,7 @@ void KernelStart(char** argv, unsigned int pmem_size, UserContext* uctx)
 			//if(gKernelPageTable.m_pte[gKStackPg0].pfn != 126 && gKernelPageTable.m_pte[gKStackPg0].pfn != 127)
 			if(gRunningProcessQ.m_head == NULL)
 			{
-				TracePrintf(0, "INFO: Idle waking up as the child.\n");
+				TracePrintf(DEBUG, "INFO: Idle waking up as the child.\n");
 				swapPageTable(pIdlePCB);
 
 				//PCB* dequed = processDequeue(&gRunningProcessQ);

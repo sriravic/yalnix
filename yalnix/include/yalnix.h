@@ -108,6 +108,17 @@
 #endif
 
 /*
+ *  Macros of increasing severity for TracePrintf
+ */
+#define SEVERE              0   // an error that causes a process to exit or the system to halt
+
+#define MODERATE            1   // an error that causes a failure
+
+#define MILD                2   //
+
+#define DEBUG               3   // normal debug messages
+
+/*
  *  All Yalnix kernel calls return ERROR in case of any error.
  */
 #define	ERROR			    (-1)
