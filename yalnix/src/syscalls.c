@@ -811,6 +811,7 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
     TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
     if(req != NULL)
     {
+        memset(req, 0, sizeof(TerminalRequest));
         req->m_code = TERM_REQ_WRITE;
         req->m_pcb = currpcb;
         req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
