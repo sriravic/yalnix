@@ -6,9 +6,6 @@
 #include <yalnix.h>
 #include <yalnixutils.h>
 
-int debug = 1;
-
-extern KernelContext* GetKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 extern KernelContext* SwitchKCS(KernelContext* kc_in, void* curr_pcb_p, void* next_pcb_p);
 
 // Interrupt handler for kernel syscalls
@@ -99,7 +96,6 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_TTY_READ:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
@@ -114,21 +110,17 @@ void interruptKernel(UserContext* ctx)
 				{
 					// We encountered an error.!
 					// Syscall Specs: Return ERROR
-					currpcb->m_uctx->regs[0] = ERROR;
-					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-					return;
+					ctx->regs[0] = ERROR;
 				}
 				else
 				{
 					// The current process will go inside and do a context switch
 					// it will be repeatedly context switched till it either completes correctly
 					// or fails. It will come out of this function and continue executing into userland
-					int read = kernelTtyRead(tty_id, buf, len);
+					int read = kernelTtyRead(tty_id, buf, len, ctx);
 					if(read == len)
-						currpcb->m_uctx->regs[0] = len;
-					else currpcb->m_uctx->regs[0] = ERROR;
-					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-					return;
+						ctx->regs[0] = len;
+					else ctx->regs[0] = ERROR;
 				}
 			}
 		break;
@@ -148,7 +140,6 @@ void interruptKernel(UserContext* ctx)
 				if(allokay != 0)
 				{
 					// We encountered an error.!
-					// Syscall Specs: Return ERROR
 					ctx->regs[0] = ERROR;
 					return;
 				}
@@ -290,30 +281,9 @@ void interruptClock(UserContext* ctx)
 		if(getHeadProcess(&gReadyToRunProcessQ) != NULL)
 		{
 			TracePrintf(DEBUG, "We have a process to schedule out\n");
-			memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-
-			processDequeue(&gRunningProcessQ);
-			processEnqueue(&gReadyToRunProcessQ, currpcb);
-			PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-			if(nextpcb != NULL)
-			{
-				int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-				if(rc == -1)
-				{
-					TracePrintf(SEVERE, "Kernel Context switch failed\n");
-					exit(-1);
-				}
-			}
-			else
-			{
-				TracePrintf(SEVERE, "ERROR: Didnot find another process to schedule - Inside : INTERRUPT_CLOCK\n");
-			}
-
-			// We just awoke.! Reset my time
-			processRemove(&gReadyToRunProcessQ, currpcb);					// remove the process that was picked to run
-			processEnqueue(&gRunningProcessQ, currpcb);
-			swapPageTable(currpcb);
-			memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+			// context switch
+			char* errormessage = "interruptClock";
+			scheduler(&gReadyToRunProcessQ, currpcb, ctx, errormessage);
 			return;
 		}
 	}
@@ -414,10 +384,12 @@ void interruptTtyReceive(UserContext* ctx)
 {
 	int tty_id = ctx->code;
 	// put the current running process into ready to run queues
-	PCB* currpcb = processDequeue(&gRunningProcessQ);
-	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+	PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+
+	processDequeue(&gRunningProcessQ);
 	processEnqueue(&gReadyToRunProcessQ, currpcb);
 
+	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 	// pick the process that was doing a service requests
 	TerminalRequest* head = &gTermRReqHeads[tty_id];
 	TerminalRequest* req = head->m_next;
@@ -457,39 +429,6 @@ void interruptTtyTransmit(UserContext* ctx)
 	// find that process and put it in ready to run queue
 	int tty_id = ctx->code;
 
-	// put the current running process into ready to run queues
-	/*
-	PCB* currpcb = processDequeue(&gRunningProcessQ);
-	memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
-	processEnqueue(&gReadyToRunProcessQ, currpcb);
-
-	// pick the process that was doing a service requests
-
-	if(req != NULL)
-	{
-		PCB* nextpcb = req->m_pcb;
-		if(nextpcb != NULL)
-		{
-			int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-			if(rc == -1)
-			{
-				TracePrintf(0, "ERROR: context switch failed inside terminal receive interrupt handler\n");
-			}
-		}
-		else
-		{
-			TracePrintf(0, "ERROR: No PCB - Inside : TTY_TRANSMIT\n");
-		}
-	}
-
-	// THis process which called the terminal process to push text to terminal
-	// wakes up here again. We put ourselves again in running queue
-	processRemove(&gReadyToRunProcessQ, currpcb);
-	processEnqueue(&gRunningProcessQ, currpcb);
-	swapPageTable(currpcb);
-	memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
-	return;
-	*/
 	TerminalRequest* head = &gTermWReqHeads[tty_id];
 	TerminalRequest* req = head->m_next;
 	if(req != NULL)

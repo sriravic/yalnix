@@ -670,7 +670,7 @@ int kernelDelay(int clock_ticks, UserContext* ctx)
 // Reads from a terminal
 // returns the number of bytes read from the terminal
 // we use -1 for error bytes read
-int kernelTtyRead(int tty_id, void *buf, int len)
+int kernelTtyRead(int tty_id, void *buf, int len, UserContext* ctx)
 {
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
     int read = -1;
@@ -688,66 +688,76 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 
     // create the new entry for this request
     TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
-    if(req != NULL)
-    {
-        req->m_code = TERM_REQ_READ;
-        req->m_pcb = currpcb;
-        req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
-        req->m_bufferR1 = buf;
-        req->m_next = NULL;
-        if(req->m_bufferR0 != NULL)
-        {
-            // append the request to the queue of request
-            curr->m_next = req;
-            req->m_len = len;
-            req->m_serviced = 0;
-            req->m_remaining = len;
-            req->m_next = NULL;
-
-            // context switch and wait for a receive to happen
-            processRemove(&gRunningProcessQ, currpcb);
-            processEnqueue(&gReadBlockedQ, currpcb);
-            PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-            if(nextpcb != NULL)
-            {
-                int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-                if(rc == -1)
-                {
-                    TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
-
-                    // remove this node from gTermWReqHeads queue
-                    if(removeTerminalRequest(req) != 0)
-                    {
-                        TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
-                    }
-                    processRemove(&gReadBlockedQ, currpcb);
-                    processEnqueue(&gRunningProcessQ, currpcb);
-                    swapPageTable(currpcb);
-                    currpcb->m_ticks = 0;
-                    return -1;
-                }
-            }
-            else
-            {
-                TracePrintf(SEVERE, "ERROR: No PCB - Inside : kernelTtyRead\n");
-            }
-
-            // we just got awoke
-            // req->serviced would be set by the interrupt in read
-            processRemove(&gReadBlockedQ, currpcb);
-            processEnqueue(&gRunningProcessQ, currpcb);
-            swapPageTable(currpcb);
-
-            // copy back the stuff into user mode space
-            toread = req->m_serviced > req->m_len ? req->m_len : req->m_serviced;
-            memcpy(req->m_bufferR1, req->m_bufferR0, toread);
-            }
-    }
-    else
+    if(req == NULL)
     {
         TracePrintf(MODERATE, "ERROR: Unable to allocate memory for read request\n");
         return ERROR;
     }
+
+    void* bufferR0 = (void*)malloc(sizeof(char) * len);
+    if(bufferR0 == NULL)
+    {
+        TracePrintf(MODERATE, "ERROR: Unable to allocate memory for read request buffer\n");
+        free(req);
+        return ERROR;
+    }
+
+    req->m_code = TERM_REQ_READ;
+    req->m_pcb = currpcb;
+    req->m_bufferR0 = bufferR0;
+    req->m_bufferR1 = buf;
+    req->m_next = NULL;
+    req->m_len = len;
+    req->m_serviced = 0;
+    req->m_remaining = len;
+
+    // append the request to the queue of request
+    curr->m_next = req;
+
+    // context switch and wait for a receive to happen
+    processRemove(&gRunningProcessQ, currpcb);
+    processEnqueue(&gReadBlockedQ, currpcb);
+
+    PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
+    memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
+    if(nextpcb != NULL)
+    {
+        int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
+        if(rc == -1)
+        {
+            TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
+
+            // remove this node from gTermWReqHeads queue
+            if(removeTerminalRequest(req) != 0)
+            {
+                TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
+            }
+            processRemove(&gReadBlockedQ, currpcb);
+            processEnqueue(&gRunningProcessQ, currpcb);
+            swapPageTable(currpcb);
+            currpcb->m_ticks = 0;
+            return -1;
+        }
+    }
+    else
+    {
+        TracePrintf(SEVERE, "ERROR: No PCB - Inside : kernelTtyRead\n");
+    }
+
+    // we just got awoke
+    // req->serviced would be set by the interrupt in read
+    processRemove(&gReadBlockedQ, currpcb);
+    processEnqueue(&gRunningProcessQ, currpcb);
+    currpcb->m_ticks = 0;
+
+    swapPageTable(currpcb);
+    memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+
+    // copy back the stuff into user mode space
+    toread = req->m_serviced > req->m_len ? req->m_len : req->m_serviced;
+    memcpy(req->m_bufferR1, req->m_bufferR0, toread);
+
+
 
     read = toread;
     if(removeTerminalRequest(req) != 0)
