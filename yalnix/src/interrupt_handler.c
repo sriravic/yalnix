@@ -256,9 +256,8 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_CUSTOM_0:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 				int tty_id = ctx->regs[0];
-				ctx->regs[0] = kernelPS(tty_id);
+				ctx->regs[0] = kernelPS(tty_id, ctx);
 				return;
 			}
 		break;

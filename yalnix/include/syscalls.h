@@ -23,6 +23,6 @@ extern int kernelCvarSignal(int cvar_id);
 extern int kernelCvarBroadcast(int cvar_id);
 extern int kernelCvarWait(int cvar_id, int lock_id, UserContext* ctx);
 extern int kernelReclaim(int id);
-extern int kernelPS(int tty_id);
+extern int kernelPS(int tty_id, UserContext* ctx);
 
 #endif

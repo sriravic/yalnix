@@ -1177,7 +1177,7 @@ int kernelReclaim(int id) {
     }
 }
 
-int safeQueuePS(int tty_id, PCBQueue* queue, char* prefix)
+int safeQueuePS(int tty_id, PCBQueue* queue, char* prefix, UserContext* ctx)
 {
     int cnt = queue->m_size;
     char buffer[512];
@@ -1192,7 +1192,7 @@ int safeQueuePS(int tty_id, PCBQueue* queue, char* prefix)
                 int rc = sprintf(buffer, "%s : \n PID : %d\t PPID: %d\t %s\n", prefix, temp->m_pid, temp->m_ppid, temp->m_name);
                 if(rc != -1)
                 {
-                    if(kernelTtyWrite(tty_id, buffer, rc) != rc)
+                    if(kernelTtyWrite(tty_id, buffer, rc, ctx) != rc)
                         return ERROR;
                     else memset(buffer, 0, 512);
                 }
@@ -1204,7 +1204,7 @@ int safeQueuePS(int tty_id, PCBQueue* queue, char* prefix)
     else return SUCCESS;
 }
 
-int kernelPS(int tty_id)
+int kernelPS(int tty_id, UserContext* ctx)
 {
     if(tty_id < NUM_TERMINALS)
     {
@@ -1214,7 +1214,7 @@ int kernelPS(int tty_id)
         int rc = sprintf(buffer, "RUNNING : \n PID : %d\t PPID : %d\t %s\n", currpcb->m_pid, currpcb->m_ppid, currpcb->m_name);
         if(rc != -1)
         {
-            if(kernelTtyWrite(tty_id, buffer, rc) != rc)
+            if(kernelTtyWrite(tty_id, buffer, rc, ctx) != rc)
             {
                 return ERROR;
             }
@@ -1223,17 +1223,17 @@ int kernelPS(int tty_id)
 
         // ready to run queue
         char prefix1[] = "READY";
-        if(safeQueuePS(tty_id, &gReadyToRunProcessQ, prefix1) != SUCCESS)
+        if(safeQueuePS(tty_id, &gReadyToRunProcessQ, prefix1, ctx) != SUCCESS)
             return ERROR;
 
         // read blocked queue
         char prefix2[] = "READ_BLOCKED";
-        if(safeQueuePS(tty_id, &gReadBlockedQ, prefix2) != SUCCESS)
+        if(safeQueuePS(tty_id, &gReadBlockedQ, prefix2, ctx) != SUCCESS)
             return ERROR;
 
         // write blocked queue
         char prefix3[] = "WRITE_BLOCKED";
-        if(safeQueuePS(tty_id, &gWriteBlockedQ, prefix3) != SUCCESS)
+        if(safeQueuePS(tty_id, &gWriteBlockedQ, prefix3, ctx) != SUCCESS)
             return ERROR;
 
         return SUCCESS;
