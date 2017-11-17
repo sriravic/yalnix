@@ -759,7 +759,7 @@ int kernelTtyRead(int tty_id, void *buf, int len)
 // returns the number of bytes it wrote to the terminal
 // the only way to return an error is by returning a value that is not equal to the len
 // we use -1 in this case
-int kernelTtyWrite(int tty_id, void *buf, int len)
+int kernelTtyWrite(int tty_id, void *buf, int len, UserContext* ctx)
 {
     // Add a request to the terminal queue
     PCB* currpcb = getHeadProcess(&gRunningProcessQ);
@@ -780,128 +780,62 @@ int kernelTtyWrite(int tty_id, void *buf, int len)
     // context switch till its get done by spinning till you get a chance
     while(head->m_next != NULL)
     {
-        processRemove(&gRunningProcessQ, currpcb);
-        processEnqueue(&gReadyToRunProcessQ, currpcb);
-        PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-        if(nextpcb != NULL)
-        {
-            int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-            if(rc == ERROR)
-            {
-                TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
-                processRemove(&gReadyToRunProcessQ, currpcb);
-                processEnqueue(&gRunningProcessQ, currpcb);
-                swapPageTable(currpcb);
-                currpcb->m_ticks = 0;
-                return ERROR;
-            }
-            TracePrintf(DEBUG, "INFO: PID : %d is about to try to terminal \n", currpcb->m_pid);
-        }
-        else
-        {
-            TracePrintf(DEBUG, "ERROR: No PCB in : kernelTtyWrite\n");
-        }
-        processRemove(&gReadyToRunProcessQ, currpcb);
-        processEnqueue(&gRunningProcessQ, currpcb);
-        swapPageTable(currpcb);
+        char* errormessage = "kernelTtyWrite 1";
+        scheduler(&gReadyToRunProcessQ, currpcb, ctx, errormessage);
     }
 
     // create the new entry for this request
     TracePrintf(DEBUG, "INFO: PID : %d is about do a terminal write\n", currpcb->m_pid);
     TerminalRequest* req = (TerminalRequest*)malloc(sizeof(TerminalRequest));
-    if(req != NULL)
-    {
-        memset(req, 0, sizeof(TerminalRequest));
-        req->m_code = TERM_REQ_WRITE;
-        req->m_pcb = currpcb;
-        req->m_bufferR0 = (void*)malloc(sizeof(char) * len);
-        req->m_next = NULL;
-        if(req->m_bufferR0 != NULL)
-        {
-            // append the request to the queue of request
-            head->m_next = req;
-            memcpy(req->m_bufferR0, buf, sizeof(char) * len);
-            req->m_len = len;
-            req->m_serviced = 0;
-            req->m_remaining = len;
-            req->m_next = NULL;
-
-            int iter = len / TERMINAL_MAX_LINE;
-            if(len % TERMINAL_MAX_LINE != 0) iter += 1;     // add one more iter if we dont have perfect sizes
-            int i;
-            for(i = 0; i < iter; i++)
-            {
-                int toSend = req->m_remaining;
-                toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
-                TtyTransmit(tty_id, req->m_bufferR0 + req->m_serviced, toSend);
-
-                // context switch
-                processRemove(&gRunningProcessQ, currpcb);
-                processEnqueue(&gWriteBlockedQ, currpcb);
-                PCB* nextpcb = getHeadProcess(&gReadyToRunProcessQ);
-                if(nextpcb != NULL)
-                {
-                    int rc = KernelContextSwitch(SwitchKCS, currpcb, nextpcb);
-                    if(rc == -1)
-                    {
-                        TracePrintf(MODERATE, "Context switch failed in terminal write. Returning without writing\n");
-
-                        // remove this node from gTermWReqHeads queue
-                        if(removeTerminalRequest(req) != 0)
-                        {
-                            TracePrintf(MODERATE, "ERROR: Removing the request failed\n");
-                        }
-                        processRemove(&gWriteBlockedQ, currpcb);
-                        processEnqueue(&gRunningProcessQ, currpcb);
-                        swapPageTable(currpcb);
-                        currpcb->m_ticks = 0;
-                        return -1;
-                    }
-                }
-                else
-                {
-                    TracePrintf(SEVERE, "ERROR: No PCB in : kernelTtyWrite\n");
-                }
-
-                // we wake up after we have written successfully to terminal
-                // someone put you in readytoun queue
-                // but someone else might be running here
-                // so spin.!
-                processRemove(&gReadyToRunProcessQ, currpcb);
-                while(head->m_next != NULL)
-                {
-                    processEnqueue(&gReadyToRunProcessQ, currpcb);
-                    PCB* spinnext = getHeadProcess(&gReadyToRunProcessQ);
-                    int sc = KernelContextSwitch(SwitchKCS, currpcb, spinnext);
-                    if(sc == -1)
-                    {
-                        TracePrintf(SEVERE, "ERROR: Could not spin and context switch\n");
-                        processRemove(&gReadyToRunProcessQ, currpcb);
-                        processEnqueue(&gRunningProcessQ, currpcb);
-                        swapPageTable(currpcb);
-                        currpcb->m_ticks = 0;
-                        return ERROR;
-                    }
-                    processRemove(&gReadyToRunProcessQ, currpcb);
-                    processEnqueue(&gRunningProcessQ, currpcb);
-                    swapPageTable(currpcb);
-                }
-                processEnqueue(&gRunningProcessQ, currpcb);
-                swapPageTable(currpcb);
-                req->m_serviced += toSend;
-            }
-        }
-        else
-        {
-            TracePrintf(MODERATE, "Error could not allocate memory for storing the amount %d bytes within the request\n", len);
-            free(req);
-            return ERROR;
-        }
-    }
-    else
+    if(req == NULL)
     {
         TracePrintf(MODERATE, "Error: Couldnt allocate memory for terminal request");
         return ERROR;
+    }
+
+    void* bufferR0 = (void*)malloc(sizeof(char) * len);
+    if(bufferR0 == NULL)
+    {
+        TracePrintf(MODERATE, "Error could not allocate memory for storing the amount %d bytes within the request\n", len);
+        free(req);
+        return ERROR;
+    }
+
+    memset(req, 0, sizeof(TerminalRequest));
+    req->m_code = TERM_REQ_WRITE;
+    req->m_pcb = currpcb;
+    req->m_bufferR0 = bufferR0;
+    memcpy(req->m_bufferR0, buf, sizeof(char) * len);
+    req->m_next = NULL;
+    req->m_len = len;
+    req->m_serviced = 0;
+    req->m_remaining = len;
+    req->m_next = NULL;
+
+    // append the request to the queue of request
+    head->m_next = req;
+
+    int iter = len / TERMINAL_MAX_LINE;
+    if(len % TERMINAL_MAX_LINE != 0) iter += 1;     // add one more iter if we dont have perfect sizes
+    int i;
+    for(i = 0; i < iter; i++)
+    {
+        int toSend = req->m_remaining;
+        toSend = toSend > TERMINAL_MAX_LINE ? TERMINAL_MAX_LINE : toSend;
+        TtyTransmit(tty_id, req->m_bufferR0 + req->m_serviced, toSend);
+
+        // Wait while the io gets written
+        char* errormessage = "kernelTtyWrite 2";
+        scheduler(&gWriteBlockedQ, currpcb, ctx, errormessage);
+
+        while(head->m_next != NULL)
+        {
+            // wait if someone else is writing
+            char* errormessage = "kernelTtyWrite 3";
+            scheduler(&gReadyToRunProcessQ, currpcb, ctx, errormessage);
+        }
+
+        req->m_serviced += toSend;
     }
 
     // remove the request from the queue and associated Memory

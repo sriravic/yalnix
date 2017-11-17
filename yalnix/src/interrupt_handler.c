@@ -135,7 +135,6 @@ void interruptKernel(UserContext* ctx)
 		case YALNIX_TTY_WRITE:
 			{
 				PCB* currpcb = getHeadProcess(&gRunningProcessQ);
-				memcpy(currpcb->m_uctx, ctx, sizeof(UserContext));
 				int tty_id = ctx->regs[0];
 				void* buf = (void*)(ctx->regs[1]);
 				int len = ctx->regs[2];
@@ -150,8 +149,7 @@ void interruptKernel(UserContext* ctx)
 				{
 					// We encountered an error.!
 					// Syscall Specs: Return ERROR
-					currpcb->m_uctx->regs[0] = ERROR;
-					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+					ctx->regs[0] = ERROR;
 					return;
 				}
 				else
@@ -159,11 +157,10 @@ void interruptKernel(UserContext* ctx)
 					// The current process will go inside and do a context switch
 					// it will be repeatedly context switched till it either completes correctly
 					// or fails. It will come out of this function and continue executing into userland
-					int written = kernelTtyWrite(tty_id, buf, len);
+					int written = kernelTtyWrite(tty_id, buf, len, ctx);
 					if(written == len)
-						currpcb->m_uctx->regs[0] = len;
-					else currpcb->m_uctx->regs[0] = ERROR;
-					memcpy(ctx, currpcb->m_uctx, sizeof(UserContext));
+						ctx->regs[0] = len;
+					else ctx->regs[0] = ERROR;
 					return;
 				}
 			}
