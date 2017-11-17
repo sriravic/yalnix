@@ -30,11 +30,11 @@ KERNEL_INCS =
 
 
 #List all user programs here.
-USER_APPS = idle init testfork testexec helloworld testterminal testmath testlock testpipe testcvar testreclaim testexit torture bigstack zero forktest
+USER_APPS = idle init testfork testexec helloworld testterminal testmath testlock testpipe testcvar testreclaim testexit torture bigstack zero forktest testps
 #List all user program source files here.  SHould be the same as the previous list, with ".c" added to each file
-USER_SRCS = idle.c init.c testfork.c testexec.c helloworld.c testterminal.c testmath.c testlock.c testpipe.c testcvar.c testreclaim.c testexit.c torture.c bigstack.c zero.c forktest.c
+USER_SRCS = idle.c init.c testfork.c testexec.c helloworld.c testterminal.c testmath.c testlock.c testpipe.c testcvar.c testreclaim.c testexit.c torture.c bigstack.c zero.c forktest.c testps.c
 #List the objects to be formed form the user  source files here.  Should be the same as the prvious list, replacing ".c" with ".o"
-USER_OBJS = idle.o init.o testfork.o testexec.o helloworld.o testterminal.o testmath.o testlock.o testpipe.o testcvar.o testreclaim.o testexit.o torture.o bigstack.o zero.o forktest.o
+USER_OBJS = idle.o init.o testfork.o testexec.o helloworld.o testterminal.o testmath.o testlock.o testpipe.o testcvar.o testreclaim.o testexit.o torture.o bigstack.o zero.o forktest.o testps.o
 #List all of the header files necessary for your user programs
 USER_INCS =
 
