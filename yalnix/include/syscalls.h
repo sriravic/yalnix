@@ -11,7 +11,7 @@ extern int kernelGetPid(void);
 extern int kernelBrk(void *addr);
 extern int kernelDelay(int clock_ticks, UserContext* ctx);
 extern int kernelTtyRead(int tty_id, void *buf, int len);
-extern int kernelTtyWrite(int tty_id, void *buf, int len);
+extern int kernelTtyWrite(int tty_id, void *buf, int len, UserContext* ctx);
 extern int kernelPipeInit(int *pipe_idp);
 extern int kernelPipeRead(int pipe_id, void *buf, int len);
 extern int kernelPipeWrite(int pipe_id, void *buf, int len);
