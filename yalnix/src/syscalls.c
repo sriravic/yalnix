@@ -1243,22 +1243,64 @@ int kernelReclaim(int id) {
     }
 }
 
+int safeQueuePS(int tty_id, PCBQueue* queue, char* prefix)
+{
+    int cnt = queue->m_size;
+    char buffer[512];
+    if(cnt > 0)
+    {
+        PCB* temp = queue->m_head;
+        if(temp != NULL)
+        {
+            int i;
+            for(i = 0; i < cnt; i++)
+            {
+                int rc = sprintf(buffer, "%s : \n PID : %d\t PPID: %d\t %s\n", prefix, temp->m_pid, temp->m_ppid, temp->m_name);
+                if(rc != -1)
+                {
+                    if(kernelTtyWrite(tty_id, buffer, rc) != rc)
+                        return ERROR;
+                    else memset(buffer, 0, 512);
+                }
+                temp = temp->m_next;
+                if(temp == NULL) break;
+            }
+        }
+    }
+    else return SUCCESS;
+}
+
 int kernelPS(int tty_id)
 {
     if(tty_id < NUM_TERMINALS)
     {
         // running queue
+        char buffer[512];
+        PCB* currpcb = getHeadProcess(&gRunningProcessQ);
+        int rc = sprintf(buffer, "RUNNING : \n PID : %d\t PPID : %d\t %s\n", currpcb->m_pid, currpcb->m_ppid, currpcb->m_name);
+        if(rc != -1)
+        {
+            if(kernelTtyWrite(tty_id, buffer, rc) != rc)
+            {
+                return ERROR;
+            }
+            else memset(buffer, 0, 512);    // flush the buffer contents
+        }
 
         // ready to run queue
+        char prefix1[] = "READY";
+        if(safeQueuePS(tty_id, &gReadyToRunProcessQ, prefix1) != SUCCESS)
+            return ERROR;
 
         // read blocked queue
+        char prefix2[] = "READ_BLOCKED";
+        if(safeQueuePS(tty_id, &gReadBlockedQ, prefix2) != SUCCESS)
+            return ERROR;
 
         // write blocked queue
-
-        // cvar waiting queue
-
-        //
-
+        char prefix3[] = "WRITE_BLOCKED";
+        if(safeQueuePS(tty_id, &gWriteBlockedQ, prefix3) != SUCCESS)
+            return ERROR;
 
         return SUCCESS;
     }
